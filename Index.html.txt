@@ -1,0 +1,1521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Calculation Master - Executive Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+  <style>
+    body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background-color: #f8fafc; font-size: 10px; }
+    .sidebar { background-color: #0b192c; }
+    .card-shadow { box-shadow: 0 3px 12px rgba(0,0,0,0.03); }
+    
+    .nav-btn {
+      position: relative;
+      transition: transform 0.15s ease, background 0.15s ease;
+      border-left: 3px solid transparent;
+    }
+    .nav-btn:hover {
+      background: linear-gradient(90deg, rgba(30, 62, 98, 0.7) 0%, rgba(15, 34, 60, 0.4) 100%);
+      color: #ffffff !important;
+      transform: translateX(4px);
+      border-left-color: #38bdf8;
+    }
+    .tab-active {
+      background: linear-gradient(90deg, #1e3e62 0%, #152e4d 100%) !important;
+      border-left: 3px solid #00adb5 !important;
+      color: #ffffff !important;
+      box-shadow: 0 4px 12px rgba(0, 173, 181, 0.15);
+    }
+    
+    .sheet-table { border-collapse: separate; border-spacing: 0; width: 100%; white-space: nowrap; }
+    .sheet-table th { 
+      background-color: #e60000; 
+      color: #ffffff; 
+      font-weight: 700; 
+      font-size: 9.5px; 
+      padding: 5px 7px; 
+      border-right: 1px solid #d30000; 
+      border-bottom: 1px solid #d30000; 
+      text-align: center; 
+      position: sticky; 
+      top: 0; 
+      z-index: 20; 
+    }
+    .sheet-table td { 
+      padding: 4px 5px; 
+      border-right: 1px solid #e2e8f0; 
+      border-bottom: 1px solid #e2e8f0; 
+      font-size: 9.5px; 
+      color: #1e293b; 
+    }
+    .sheet-table tr:hover td { background-color: #f1f5f9 !important; }
+
+    .col-income { background-color: #fee2e2; }
+    .col-expense { background-color: #dcfce7; }
+    .col-inv { background-color: #fef3c7; }
+    .col-with { background-color: #ede9fe; }
+
+    .summary-month-table { border-collapse: collapse; width: 100%; text-align: right; }
+    .summary-month-table th {
+      background-color: #fef3c7;
+      color: #1e293b;
+      font-weight: 700;
+      font-size: 10px;
+      padding: 5px 7px;
+      border: 1px solid #cbd5e1;
+      text-align: center;
+    }
+    .summary-month-table td { padding: 4px 7px; border: 1px solid #cbd5e1; font-size: 9.5px; }
+    .summary-month-table tr:hover td { background-color: #f8fafc; }
+    .summary-month-table .total-row { background-color: #ffffff; font-weight: 700; border-top: 2px solid #000; border-bottom: 2px solid #000; }
+
+    .custom-scroll::-webkit-scrollbar { height: 8px; width: 8px; }
+    .custom-scroll::-webkit-scrollbar-track { background: #e2e8f0; border-radius: 4px; }
+    .custom-scroll::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 4px; }
+    .custom-scroll::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+    .drag-handle {
+      cursor: grab;
+      user-select: none;
+    }
+    .drag-handle:active {
+      cursor: grabbing;
+    }
+    .draggable-item {
+      transition: background-color 0.15s ease, transform 0.15s ease;
+    }
+    .draggable-item.dragging {
+      opacity: 0.4;
+      background-color: #e0f2fe !important;
+      border: 1px dashed #0284c7 !important;
+    }
+    .drag-over {
+      border-top: 2px solid #0284c7 !important;
+    }
+
+    @media print {
+      body * { visibility: hidden !important; }
+      .print-active, .print-active * { visibility: visible !important; }
+      .print-active { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; padding: 20px !important; }
+      .no-print { display: none !important; }
+    }
+  </style>
+</head>
+<body class="flex h-screen overflow-hidden text-slate-700">
+
+  <div id="mobile-backdrop" onclick="toggleMobileSidebar()" class="fixed inset-0 bg-slate-900/60 z-40 hidden md:hidden"></div>
+
+  <!-- Sidebar -->
+  <aside id="main-sidebar" class="w-52 sidebar text-slate-300 flex flex-col justify-between shrink-0 fixed md:static inset-y-0 left-0 z-50 transform -translate-x-full md:translate-x-0 transition-transform duration-150 ease-in-out no-print">
+    <div>
+      <div class="h-12 flex items-center justify-between px-3 border-b border-slate-800">
+        <div class="flex items-center gap-2">
+          <i class="fa-solid fa-calculator text-cyan-400 text-base"></i>
+          <h1 class="text-xs font-bold text-white tracking-wide">Calculation Master</h1>
+        </div>
+        <button onclick="toggleMobileSidebar()" class="md:hidden text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-sm"></i></button>
+      </div>
+      
+      <nav class="mt-2.5 px-2 space-y-1">
+        <button onclick="switchTab('dashboard')" id="btn-dashboard" class="nav-btn w-full flex items-center gap-2 px-2.5 py-2 rounded-md font-medium tab-active text-white text-[10.5px]">
+          <i class="fa-solid fa-table-columns text-emerald-400 w-3.5 text-center"></i> <span>Dashboard</span>
+        </button>
+        <button onclick="switchTab('transactions')" id="btn-transactions" class="nav-btn w-full flex items-center gap-2 px-2.5 py-2 rounded-md font-medium text-slate-300 text-[10.5px]">
+          <i class="fa-solid fa-receipt text-sky-400 w-3.5 text-center"></i> <span>All Transactions</span>
+        </button>
+        <button onclick="switchTab('categories')" id="btn-categories" class="nav-btn w-full flex items-center gap-2 px-2.5 py-2 rounded-md font-medium text-slate-300 text-[10.5px]">
+          <i class="fa-solid fa-tags text-indigo-400 w-3.5 text-center"></i> <span>Add Category</span>
+        </button>
+        <button onclick="switchTab('databank')" id="btn-databank" class="nav-btn w-full flex items-center gap-2 px-2.5 py-2 rounded-md font-medium text-slate-300 text-[10.5px]">
+          <i class="fa-solid fa-database text-amber-400 w-3.5 text-center"></i> <span>Data Bank</span>
+        </button>
+      </nav>
+    </div>
+    <div class="p-2 border-t border-slate-800 text-[9.5px] text-slate-500 text-center">
+      Calculation Master &copy; 2026
+    </div>
+  </aside>
+
+  <!-- Main View -->
+  <main class="flex-1 flex flex-col overflow-y-auto w-full">
+    <header class="bg-white border-b border-slate-200 px-3 py-1.5 flex items-center justify-between sticky top-0 z-30 no-print">
+      <div class="flex items-center gap-2.5">
+        <button onclick="toggleMobileSidebar()" class="md:hidden text-slate-600 text-sm focus:outline-none"><i class="fa-solid fa-bars"></i></button>
+        <h2 id="page-title" class="text-xs font-bold text-slate-800">Executive Dashboard</h2>
+        <span class="bg-cyan-50 text-cyan-700 text-[9.5px] font-bold px-1.5 py-0.5 rounded border border-cyan-200 hidden sm:inline-block">UK (£)</span>
+      </div>
+
+      <!-- Live Clock & Date -->
+      <div class="flex items-center gap-2.5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border border-indigo-500/30 px-3.5 py-1 rounded-lg shadow-md">
+        <div class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></div>
+        <div class="text-center leading-tight">
+          <div id="live-time" class="font-mono font-bold text-[11px] text-cyan-300 tracking-wider">00:00:00 AM</div>
+          <div id="live-date" class="text-[9px] font-semibold text-slate-300">Loading...</div>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2.5">
+        <button onclick="openModal()" class="bg-sky-900 hover:bg-sky-800 text-white px-2.5 py-1 rounded font-medium text-[10.5px] flex items-center gap-1 shadow transition hover:shadow-md">
+          <i class="fa-solid fa-plus text-[9px]"></i> <span class="hidden sm:inline">Add</span> Transaction
+        </button>
+      </div>
+    </header>
+
+    <div class="p-2.5 sm:p-3 space-y-3">
+      
+      <!-- DASHBOARD TAB -->
+      <section id="tab-dashboard" class="space-y-3">
+        
+        <!-- Top 4 KPI Cards in exact serial -->
+        <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+          <div class="bg-white p-2.5 rounded-lg border-l-4 border-amber-500 card-shadow">
+            <span class="text-[8.5px] font-bold uppercase tracking-wider text-slate-400">Total Investment</span>
+            <h3 class="text-xs sm:text-sm font-bold text-amber-500 mt-0.5" id="kpi-investment">£ 0.00</h3>
+          </div>
+          <div class="bg-white p-2.5 rounded-lg border-l-4 border-emerald-500 card-shadow">
+            <span class="text-[8.5px] font-bold uppercase tracking-wider text-slate-400">Total Income (Cash Inflow)</span>
+            <h3 class="text-xs sm:text-sm font-bold text-emerald-600 mt-0.5" id="kpi-income">£ 0.00</h3>
+          </div>
+          <div class="bg-white p-2.5 rounded-lg border-l-4 border-rose-500 card-shadow">
+            <span class="text-[8.5px] font-bold uppercase tracking-wider text-slate-400">Total Expense (Cash Outflow)</span>
+            <h3 class="text-xs sm:text-sm font-bold text-rose-500 mt-0.5" id="kpi-expense">£ 0.00</h3>
+          </div>
+          <div class="bg-white p-2.5 rounded-lg border-l-4 border-purple-500 card-shadow">
+            <span class="text-[8.5px] font-bold uppercase tracking-wider text-slate-400">Net Profit / Loss</span>
+            <h3 class="text-xs sm:text-sm font-bold text-purple-600 mt-0.5" id="kpi-net">£ 0.00</h3>
+          </div>
+        </div>
+
+        <!-- Dashboard Filter Bar -->
+        <div class="bg-white p-2 rounded-lg flex flex-wrap items-center justify-between gap-2 card-shadow no-print border border-slate-100">
+          <div class="flex flex-wrap items-center gap-1.5 w-full lg:w-auto">
+            <button onclick="setDashPeriod('all')" id="btn-dash-all" class="px-2 py-1 rounded text-[10px] font-semibold bg-slate-900 text-white transition">All Time</button>
+            <button onclick="setDashPeriod('week')" id="btn-dash-week" class="px-2 py-1 rounded text-[10px] font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200 transition">Weekly</button>
+            <button onclick="setDashPeriod('month')" id="btn-dash-month" class="px-2 py-1 rounded text-[10px] font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200 transition">Monthly</button>
+            <button onclick="setDashPeriod('year')" id="btn-dash-year" class="px-2 py-1 rounded text-[10px] font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200 transition">Yearly</button>
+            
+            <div class="hidden sm:block h-3.5 w-[1px] bg-slate-200 mx-1"></div>
+
+            <!-- Project Multi-select -->
+            <div class="relative inline-block text-left" id="dash-project-multiselect">
+              <button type="button" onclick="toggleMultiSelectDropdown('dash', 'project')" class="border border-slate-300 rounded px-2 py-1 text-[10px] text-slate-700 focus:outline-none bg-slate-50 font-semibold flex items-center justify-between gap-1.5 min-w-[110px]">
+                <span id="dash-project-btn-label" class="truncate">All Projects</span>
+                <i class="fa-solid fa-angle-down text-[9px] text-slate-500"></i>
+              </button>
+              <div id="dash-project-dropdown-panel" class="hidden absolute left-0 mt-1 w-52 bg-white border border-slate-200 rounded-lg shadow-xl z-50 p-2 space-y-1 text-[10px] max-h-56 overflow-y-auto">
+                <div class="flex items-center justify-between border-b pb-1 px-1">
+                  <label class="inline-flex items-center gap-1.5 font-bold cursor-pointer text-slate-800">
+                    <input type="checkbox" id="dash-select-all-proj" onchange="toggleSelectAll('dash', 'project')" checked class="rounded text-sky-600 focus:ring-0">
+                    <span>Select All</span>
+                  </label>
+                  <span id="dash-proj-selected-count" class="text-[9.5px] text-slate-400 font-semibold">0 selected</span>
+                </div>
+                <div id="dash-project-checkbox-list" class="space-y-0.5 pt-1"></div>
+              </div>
+            </div>
+
+            <!-- Type Multi-select (Dashboard) -->
+            <div class="relative inline-block text-left" id="dash-type-multiselect">
+              <button type="button" onclick="toggleMultiSelectDropdown('dash', 'type')" class="border border-slate-300 rounded px-2 py-1 text-[10px] text-slate-700 focus:outline-none bg-slate-50 font-semibold flex items-center justify-between gap-1.5 min-w-[105px]">
+                <span id="dash-type-btn-label" class="truncate">All Types</span>
+                <i class="fa-solid fa-angle-down text-[9px] text-slate-500"></i>
+              </button>
+              <div id="dash-type-dropdown-panel" class="hidden absolute left-0 mt-1 w-48 bg-white border border-slate-200 rounded-lg shadow-xl z-50 p-2 space-y-1 text-[10px] max-h-56 overflow-y-auto">
+                <div class="flex items-center justify-between border-b pb-1 px-1">
+                  <label class="inline-flex items-center gap-1.5 font-bold cursor-pointer text-slate-800">
+                    <input type="checkbox" id="dash-select-all-type" onchange="toggleSelectAll('dash', 'type')" checked class="rounded text-sky-600 focus:ring-0">
+                    <span>Select All</span>
+                  </label>
+                  <span id="dash-type-selected-count" class="text-[9.5px] text-slate-400 font-semibold">0 selected</span>
+                </div>
+                <div id="dash-type-checkbox-list" class="space-y-0.5 pt-1"></div>
+              </div>
+            </div>
+
+            <!-- Category Multi-select -->
+            <div class="relative inline-block text-left" id="dash-category-multiselect">
+              <button type="button" onclick="toggleMultiSelectDropdown('dash', 'category')" class="border border-slate-300 rounded px-2 py-1 text-[10px] text-slate-700 focus:outline-none bg-slate-50 font-semibold flex items-center justify-between gap-1.5 min-w-[120px]">
+                <span id="dash-category-btn-label" class="truncate">All Categories</span>
+                <i class="fa-solid fa-angle-down text-[9px] text-slate-500"></i>
+              </button>
+              <div id="dash-category-dropdown-panel" class="hidden absolute left-0 mt-1 w-56 bg-white border border-slate-200 rounded-lg shadow-xl z-50 p-2 space-y-1 text-[10px] max-h-56 overflow-y-auto">
+                <div class="flex items-center justify-between border-b pb-1 px-1">
+                  <label class="inline-flex items-center gap-1.5 font-bold cursor-pointer text-slate-800">
+                    <input type="checkbox" id="dash-select-all-cat" onchange="toggleSelectAll('dash', 'category')" checked class="rounded text-sky-600 focus:ring-0">
+                    <span>Select All</span>
+                  </label>
+                  <span id="dash-cat-selected-count" class="text-[9.5px] text-slate-400 font-semibold">0 selected</span>
+                </div>
+                <div id="dash-category-checkbox-list" class="space-y-0.5 pt-1"></div>
+              </div>
+            </div>
+
+            <!-- Only Month Filter -->
+            <select id="dash-only-month" onchange="applyDashFilters()" class="border border-slate-300 rounded px-2 py-1 text-[10px] text-slate-700 focus:outline-none bg-slate-50 font-semibold">
+              <option value="">All Months</option>
+              <option value="01">January</option>
+              <option value="02">February</option>
+              <option value="03">March</option>
+              <option value="04">April</option>
+              <option value="05">May</option>
+              <option value="06">June</option>
+              <option value="07">July</option>
+              <option value="08">August</option>
+              <option value="09">September</option>
+              <option value="10">October</option>
+              <option value="11">November</option>
+              <option value="12">December</option>
+            </select>
+
+            <!-- Running Date Badge -->
+            <div id="dash-project-duration" class="bg-gradient-to-r from-blue-600 via-indigo-600 to-sky-600 text-white px-2.5 py-0.5 rounded text-[10px] font-bold flex items-center gap-1.5 shadow-sm border border-indigo-400/40 tracking-wide">
+              <span class="flex h-1.5 w-1.5 relative">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-300 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-400"></span>
+              </span>
+              <i class="fa-solid fa-calendar-check text-[9.5px] text-sky-200"></i>
+              <span id="dash-duration-text">Running: All Records</span>
+            </div>
+
+            <select id="dash-year-select" onchange="applyDashFilters()" class="border border-slate-300 rounded px-2 py-1 text-[10px] text-slate-700 focus:outline-none bg-slate-50 font-semibold">
+              <option value="">All Years</option>
+            </select>
+
+            <div class="flex items-center gap-1 bg-slate-50 border border-slate-300 rounded px-1.5 py-0.5 text-[10px]">
+              <span class="text-slate-400 font-semibold text-[9px]">Month Range:</span>
+              <select id="dash-from-month" onchange="applyDashFilters()" class="bg-transparent border-0 focus:outline-none text-[10px] font-semibold text-slate-700">
+                <option value="">From</option>
+              </select>
+              <span class="text-slate-400 text-[9px]">-</span>
+              <select id="dash-to-month" onchange="applyDashFilters()" class="bg-transparent border-0 focus:outline-none text-[10px] font-semibold text-slate-700">
+                <option value="">To</option>
+              </select>
+            </div>
+
+            <button onclick="resetDashFilters()" class="px-2 py-0.5 text-[10px] text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded flex items-center gap-1 font-semibold transition">
+              <i class="fa-solid fa-rotate-left text-[9px] text-slate-500"></i> Reset
+            </button>
+          </div>
+
+          <div class="flex items-center gap-2 w-full lg:w-auto justify-between lg:justify-end">
+            <div class="flex items-center gap-1 bg-slate-50 border border-slate-300 rounded px-1.5 py-0.5 text-[10px]">
+              <input type="date" id="dash-from-date" onchange="applyDashFilters()" class="bg-transparent border-0 focus:outline-none text-[10px]">
+              <span class="text-slate-400">to</span>
+              <input type="date" id="dash-to-date" onchange="applyDashFilters()" class="bg-transparent border-0 focus:outline-none text-[10px]">
+            </div>
+
+            <button onclick="openDashboardPdfModal()" class="bg-rose-700 hover:bg-rose-800 text-white text-[10px] font-semibold px-2.5 py-1 rounded flex items-center gap-1 shadow transition">
+              <i class="fa-solid fa-file-pdf text-[9px]"></i> Dashboard PDF
+            </button>
+          </div>
+        </div>
+
+        <!-- Trend Chart & Categories -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-3">
+          <div class="lg:col-span-2 bg-white p-3.5 rounded-lg card-shadow border border-slate-100 flex flex-col justify-between">
+            <div class="flex justify-between items-center mb-1">
+              <div>
+                <h4 class="text-[11px] font-bold text-slate-800">Income vs Expense Trend</h4>
+                <p class="text-[9px] text-slate-400">Amount digits displayed on top of bars</p>
+              </div>
+              <div class="flex items-center gap-3 text-[9.5px]">
+                <span class="flex items-center gap-1 text-emerald-600 font-bold"><span class="w-2 h-2 bg-emerald-500 rounded inline-block"></span> Income</span>
+                <span class="flex items-center gap-1 text-rose-600 font-bold"><span class="w-2 h-2 bg-rose-500 rounded inline-block"></span> Expense</span>
+              </div>
+            </div>
+            <div class="h-48 relative mt-2">
+              <canvas id="trendChart"></canvas>
+            </div>
+          </div>
+
+          <div class="bg-white p-3.5 rounded-lg card-shadow border border-slate-100 flex flex-col justify-between">
+            <div>
+              <div class="flex justify-between items-center mb-2.5">
+                <h4 class="text-[11px] font-bold text-slate-800">Expense Breakdown by Category</h4>
+                <span class="text-[9.5px] text-slate-400 font-semibold" id="cat-count-info">0 Categories</span>
+              </div>
+              <div id="category-progress-list" class="space-y-2"></div>
+            </div>
+
+            <div class="pt-2 text-center border-t border-slate-100 mt-2" id="see-more-container">
+              <button onclick="toggleExpenseCategories()" id="btn-toggle-cats" class="text-[10px] font-semibold text-sky-700 hover:text-sky-900 border border-sky-200 hover:bg-sky-50 px-2.5 py-0.5 rounded-full transition inline-flex items-center gap-1 shadow-sm">
+                <span>See more</span> <i class="fa-solid fa-chevron-down text-[9px]"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Monthly Summary Table -->
+        <div class="bg-white p-3.5 rounded-lg card-shadow border border-slate-100 space-y-2">
+          <div class="flex justify-between items-center border-b pb-1.5">
+            <h4 class="text-[11px] font-bold text-slate-800"><i class="fa-solid fa-calendar-days text-amber-500 mr-1"></i> Summary by Month</h4>
+            <span class="text-[9.5px] text-slate-500 font-semibold" id="summary-month-count">0 Months Calculated</span>
+          </div>
+
+          <div class="overflow-x-auto custom-scroll max-h-64 border border-slate-300 rounded">
+            <table class="summary-month-table">
+              <thead>
+                <tr>
+                  <th style="width: 16%;">Months</th>
+                  <th style="width: 17%;">Investment</th>
+                  <th style="width: 17%;">Income</th>
+                  <th style="width: 17%;">Expense</th>
+                  <th style="width: 17%;">Withdrawal</th>
+                  <th style="width: 16%;">Profit / Loss</th>
+                  <th style="width: 17%;" class="border-r-0">Balance</th>
+                </tr>
+              </thead>
+              <tbody id="summary-month-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ALL TRANSACTIONS TAB -->
+      <section id="tab-transactions" class="hidden space-y-2">
+        <div class="bg-white p-2 rounded-lg card-shadow flex flex-wrap items-center justify-between gap-2 no-print">
+          <div class="flex flex-wrap items-center gap-1.5">
+            <input type="text" id="tx-search" placeholder="Search ID, Notes..." oninput="debounce(applyTxFilters, 150)()" class="border border-slate-300 rounded px-2 py-1 w-28 focus:outline-none focus:border-sky-500 text-[10px]">
+            
+            <!-- Project Multi-select -->
+            <div class="relative inline-block text-left" id="tx-project-multiselect">
+              <button type="button" onclick="toggleMultiSelectDropdown('tx', 'project')" class="border border-slate-300 rounded px-2 py-1 text-[10px] text-slate-700 focus:outline-none bg-slate-50 font-medium flex items-center justify-between gap-1.5 min-w-[110px]">
+                <span id="tx-project-btn-label" class="truncate">All Projects</span>
+                <i class="fa-solid fa-angle-down text-[9px] text-slate-500"></i>
+              </button>
+              <div id="tx-project-dropdown-panel" class="hidden absolute left-0 mt-1 w-52 bg-white border border-slate-200 rounded-lg shadow-xl z-50 p-2 space-y-1 text-[10px] max-h-56 overflow-y-auto">
+                <div class="flex items-center justify-between border-b pb-1 px-1">
+                  <label class="inline-flex items-center gap-1.5 font-bold cursor-pointer text-slate-800">
+                    <input type="checkbox" id="tx-select-all-proj" onchange="toggleSelectAll('tx', 'project')" checked class="rounded text-sky-600 focus:ring-0">
+                    <span>Select All</span>
+                  </label>
+                  <span id="tx-proj-selected-count" class="text-[9.5px] text-slate-400 font-semibold">0 selected</span>
+                </div>
+                <div id="tx-project-checkbox-list" class="space-y-0.5 pt-1"></div>
+              </div>
+            </div>
+
+            <!-- Type Multi-select (Transactions) -->
+            <div class="relative inline-block text-left" id="tx-type-multiselect">
+              <button type="button" onclick="toggleMultiSelectDropdown('tx', 'type')" class="border border-slate-300 rounded px-2 py-1 text-[10px] text-slate-700 focus:outline-none bg-slate-50 font-medium flex items-center justify-between gap-1.5 min-w-[105px]">
+                <span id="tx-type-btn-label" class="truncate">All Types</span>
+                <i class="fa-solid fa-angle-down text-[9px] text-slate-500"></i>
+              </button>
+              <div id="tx-type-dropdown-panel" class="hidden absolute left-0 mt-1 w-48 bg-white border border-slate-200 rounded-lg shadow-xl z-50 p-2 space-y-1 text-[10px] max-h-56 overflow-y-auto">
+                <div class="flex items-center justify-between border-b pb-1 px-1">
+                  <label class="inline-flex items-center gap-1.5 font-bold cursor-pointer text-slate-800">
+                    <input type="checkbox" id="tx-select-all-type" onchange="toggleSelectAll('tx', 'type')" checked class="rounded text-sky-600 focus:ring-0">
+                    <span>Select All</span>
+                  </label>
+                  <span id="tx-type-selected-count" class="text-[9.5px] text-slate-400 font-semibold">0 selected</span>
+                </div>
+                <div id="tx-type-checkbox-list" class="space-y-0.5 pt-1"></div>
+              </div>
+            </div>
+
+            <!-- Category Multi-select -->
+            <div class="relative inline-block text-left" id="tx-category-multiselect">
+              <button type="button" onclick="toggleMultiSelectDropdown('tx', 'category')" class="border border-slate-300 rounded px-2 py-1 text-[10px] text-slate-700 focus:outline-none bg-slate-50 font-medium flex items-center justify-between gap-1.5 min-w-[120px]">
+                <span id="tx-category-btn-label" class="truncate">All Categories</span>
+                <i class="fa-solid fa-angle-down text-[9px] text-slate-500"></i>
+              </button>
+              <div id="tx-category-dropdown-panel" class="hidden absolute left-0 mt-1 w-56 bg-white border border-slate-200 rounded-lg shadow-xl z-50 p-2 space-y-1 text-[10px] max-h-56 overflow-y-auto">
+                <div class="flex items-center justify-between border-b pb-1 px-1">
+                  <label class="inline-flex items-center gap-1.5 font-bold cursor-pointer text-slate-800">
+                    <input type="checkbox" id="tx-select-all-cat" onchange="toggleSelectAll('tx', 'category')" checked class="rounded text-sky-600 focus:ring-0">
+                    <span>Select All</span>
+                  </label>
+                  <span id="tx-cat-selected-count" class="text-[9.5px] text-slate-400 font-semibold">0 selected</span>
+                </div>
+                <div id="tx-category-checkbox-list" class="space-y-0.5 pt-1"></div>
+              </div>
+            </div>
+
+            <select id="tx-only-month" onchange="applyTxFilters()" class="border border-slate-300 rounded px-2 py-1 text-[10px] focus:outline-none bg-slate-50 font-medium text-slate-700">
+              <option value="">All Months</option>
+              <option value="01">January</option>
+              <option value="02">February</option>
+              <option value="03">March</option>
+              <option value="04">April</option>
+              <option value="05">May</option>
+              <option value="06">June</option>
+              <option value="07">July</option>
+              <option value="08">August</option>
+              <option value="09">September</option>
+              <option value="10">October</option>
+              <option value="11">November</option>
+              <option value="12">December</option>
+            </select>
+
+            <select id="tx-filter-year" onchange="applyTxFilters()" class="border border-slate-300 rounded px-2 py-1 text-[10px] focus:outline-none bg-slate-50 font-semibold text-slate-700">
+              <option value="">All Years</option>
+            </select>
+
+            <div class="flex items-center gap-1 bg-slate-50 border border-slate-300 rounded px-1.5 py-0.5 text-[10px]">
+              <span class="text-slate-400 font-semibold text-[9px]">Month Range:</span>
+              <select id="tx-from-month" onchange="applyTxFilters()" class="bg-transparent border-0 focus:outline-none text-[10px] font-semibold text-slate-700">
+                <option value="">From</option>
+              </select>
+              <span class="text-slate-400 text-[9px]">-</span>
+              <select id="tx-to-month" onchange="applyTxFilters()" class="bg-transparent border-0 focus:outline-none text-[10px] font-semibold text-slate-700">
+                <option value="">To</option>
+              </select>
+            </div>
+
+            <button onclick="resetTxFilters()" class="px-2 py-0.5 text-[10px] text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded flex items-center gap-1 font-semibold transition">
+              <i class="fa-solid fa-rotate-left text-[9px] text-slate-500"></i> Reset
+            </button>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <span id="tx-count-badge" class="bg-sky-100 text-sky-800 text-[9.5px] font-bold px-2 py-0.5 rounded">0 Rows</span>
+            <button onclick="exportTransactionsExcel()" class="bg-emerald-700 hover:bg-emerald-800 text-white text-[10px] font-semibold px-2.5 py-1 rounded flex items-center gap-1 shadow transition">
+              <i class="fa-solid fa-file-excel text-[9px]"></i> Export Excel
+            </button>
+            <button onclick="openPdfReportModal()" class="bg-rose-700 hover:bg-rose-800 text-white text-[10px] font-semibold px-2.5 py-1 rounded flex items-center gap-1 shadow transition">
+              <i class="fa-solid fa-file-pdf text-[9px]"></i> PDF / Print Report
+            </button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 no-print">
+          <div class="bg-amber-50/80 border border-amber-200 px-2.5 py-1.5 rounded-lg flex items-center justify-between">
+            <div>
+              <p class="text-[8.5px] font-bold uppercase text-amber-700">INVESTMENT</p>
+              <h4 class="text-[11px] font-bold text-amber-900 mt-0.5" id="sum-filtered-inv">£ 0.00</h4>
+            </div>
+            <i class="fa-solid fa-hand-holding-dollar text-amber-500 text-base opacity-80"></i>
+          </div>
+
+          <div class="bg-emerald-50/80 border border-emerald-200 px-2.5 py-1.5 rounded-lg flex items-center justify-between">
+            <div>
+              <p class="text-[8.5px] font-bold uppercase text-emerald-700">INCOME</p>
+              <h4 class="text-[11px] font-bold text-emerald-900 mt-0.5" id="sum-filtered-inc">£ 0.00</h4>
+            </div>
+            <i class="fa-solid fa-arrow-down-left text-emerald-500 text-base opacity-80"></i>
+          </div>
+
+          <div class="bg-rose-50/80 border border-rose-200 px-2.5 py-1.5 rounded-lg flex items-center justify-between">
+            <div>
+              <p class="text-[8.5px] font-bold uppercase text-rose-700">EXPENSE</p>
+              <h4 class="text-[11px] font-bold text-rose-900 mt-0.5" id="sum-filtered-exp">£ 0.00</h4>
+            </div>
+            <i class="fa-solid fa-arrow-up-right text-rose-500 text-base opacity-80"></i>
+          </div>
+
+          <div id="sum-profit-loss-card" class="bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-lg flex items-center justify-between transition-colors">
+            <div>
+              <p class="text-[8.5px] font-bold uppercase text-slate-500" id="sum-profit-loss-label">NET BALANCE</p>
+              <h4 class="text-[11px] font-bold text-slate-800 mt-0.5" id="sum-filtered-net">£ 0.00</h4>
+            </div>
+            <span id="sum-profit-loss-badge" class="px-1.5 py-0.5 rounded text-[8.5px] font-bold bg-slate-200 text-slate-700">BALANCED</span>
+          </div>
+        </div>
+
+        <div id="tx-table-scroll-container" onscroll="handleTableScroll(this)" class="bg-white rounded-lg shadow border border-slate-300 sheet-table-wrapper overflow-auto custom-scroll" style="height: calc(100vh - 200px);">
+          <table class="sheet-table">
+            <thead>
+              <tr>
+                <th style="width: 28px;">#</th>
+                <th style="background-color: #b91c1c;">ID</th>
+                <th style="background-color: #b91c1c;">Timestamp</th>
+                <th>Date</th>
+                <th>Project</th>
+                <th>Transaction type</th>
+                <th>Investment Type / Source</th>
+                <th>Through</th>
+                <th>Note For Investment</th>
+                <th>Investment Amount (£)</th>
+                <th>Income Category</th>
+                <th>Income Received Via</th>
+                <th>Note For Income</th>
+                <th>Income Amount (£)</th>
+                <th>Expense Category</th>
+                <th>Expense Paid Via</th>
+                <th>Note For Expense</th>
+                <th>Expense Amount (£)</th>
+                <th>Description/Remarks</th>
+                <th>Important--Link</th>
+                <th>Receipt / Invoice Upload</th>
+                <th style="background-color: #4338ca;">Withdrawal (Col V) (£)</th>
+              </tr>
+            </thead>
+            <tbody id="all-transactions-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ADD CATEGORY TAB (WITH DRAG & DROP SERIAL MOVE) -->
+      <section id="tab-categories" class="hidden space-y-3">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div class="bg-white p-3.5 rounded-lg card-shadow space-y-2">
+            <h3 class="text-[11px] font-bold text-slate-800 border-b pb-1"><i class="fa-solid fa-plus-circle text-indigo-500 mr-1"></i> Add Category / Project</h3>
+            <form id="cat-form" onsubmit="submitCategory(event)" class="space-y-2">
+              <div>
+                <label class="block font-semibold text-slate-500 mb-0.5 text-[10px]">Target Section</label>
+                <select id="new-cat-type" class="w-full border border-slate-300 rounded px-2 py-1 bg-slate-50 text-[10px]">
+                  <option value="Project">Project Name</option>
+                  <option value="Investment">Investment Type / Source</option>
+                  <option value="Income">Income Category</option>
+                  <option value="Expense">Expense Category</option>
+                </select>
+              </div>
+              <div>
+                <label class="block font-semibold text-slate-500 mb-0.5 text-[10px]">Name</label>
+                <input type="text" id="new-cat-name" placeholder="Name..." required class="w-full border border-slate-300 rounded px-2 py-1 text-[10px]">
+              </div>
+              <button type="submit" id="btn-cat-save" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-1 rounded transition text-[10px]">Save</button>
+            </form>
+          </div>
+
+          <div class="md:col-span-2 bg-white p-3.5 rounded-lg card-shadow space-y-2">
+            <h3 class="text-[11px] font-bold text-slate-800 border-b pb-1 flex justify-between items-center">
+              <span><i class="fa-solid fa-grip-vertical text-slate-500 mr-1"></i> Categories & Serial Reorder</span>
+              <span class="text-[9px] text-sky-600 font-semibold bg-sky-50 px-2 py-0.5 rounded border border-sky-100">
+                <i class="fa-solid fa-hand-pointer mr-0.5"></i> Mouse দিয়ে টেনে উপরে-নিচে সিরিয়াল সাজান
+              </span>
+            </h3>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2" id="cat-list-display"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- DATA BANK TAB -->
+      <section id="tab-databank" class="hidden space-y-4">
+        <div class="bg-white p-6 rounded-lg card-shadow max-w-sm mx-auto text-center mt-12 space-y-3 border border-slate-100">
+          <div class="w-12 h-12 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto text-base shadow-inner">
+            <i class="fa-solid fa-shield-halved"></i>
+          </div>
+          <h3 class="font-bold text-slate-800 text-xs">Protected Google Sheet</h3>
+          <p class="text-slate-500 text-[10px]">পাসওয়ার্ড দিন, সরাসরি মূল গুগল শিট ওপেন হবে।</p>
+          
+          <form onsubmit="handleDirectSheetAccess(event)" class="space-y-2.5">
+            <div class="relative">
+              <input type="password" id="databank-pwd" placeholder="Enter Password" autocomplete="off" class="border border-slate-300 rounded px-2.5 py-1.5 w-full text-[10px] text-center tracking-widest focus:outline-none focus:border-amber-500 pr-8">
+              <button type="button" onclick="togglePasswordVisibility()" class="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 text-[10px]">
+                <i id="pwd-eye-icon" class="fa-solid fa-eye"></i>
+              </button>
+            </div>
+            <button type="submit" class="w-full bg-amber-500 hover:bg-amber-600 text-white font-medium py-1.5 rounded transition text-[10px] shadow flex items-center justify-center gap-1">
+              <i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i> Open Google Sheet
+            </button>
+          </form>
+          <p id="pwd-error" class="text-rose-500 text-[10px] font-semibold hidden">ভুল পাসওয়ার্ড! আবার চেষ্টা করুন।</p>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- DASHBOARD PDF MODAL -->
+  <div id="dash-pdf-modal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-3">
+    <div class="bg-white rounded-xl max-w-4xl w-full p-4 sm:p-5 shadow-2xl space-y-3 max-h-[95vh] flex flex-col justify-between">
+      <div class="flex justify-between items-center border-b pb-2.5 no-print">
+        <div class="flex items-center gap-2">
+          <i class="fa-solid fa-file-pdf text-rose-600 text-base"></i>
+          <div>
+            <h3 class="font-bold text-slate-800 text-xs">Dashboard Executive PDF Preview</h3>
+            <p class="text-[9.5px] text-slate-500" id="dash-pdf-subtitle">Management Report</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="printDashPdfModal()" class="bg-rose-700 hover:bg-rose-800 text-white px-3 py-1 rounded font-semibold text-[10px] flex items-center gap-1 shadow transition">
+            <i class="fa-solid fa-print text-[9px]"></i> Print / Save as PDF
+          </button>
+          <button onclick="closeDashboardPdfModal()" class="text-slate-400 hover:text-slate-600 px-1.5 py-0.5"><i class="fa-solid fa-xmark text-sm"></i></button>
+        </div>
+      </div>
+
+      <div id="dash-pdf-printable" class="overflow-y-auto custom-scroll flex-1 pr-1 space-y-3 text-slate-800 text-[10px]">
+        <div class="flex justify-between items-start border-b border-slate-300 pb-2.5">
+          <div>
+            <h1 class="text-sm font-bold text-slate-900">EXECUTIVE FINANCIAL DASHBOARD</h1>
+            <p class="text-[10px] text-slate-500" id="dash-report-scope">Scope: Performance</p>
+          </div>
+          <div class="text-right text-[9.5px] text-slate-500">
+            <p>Generated: <span id="dash-report-gen-date" class="font-semibold text-slate-700"></span></p>
+            <p>Currency: <strong class="text-slate-800">GBP (£ - UK Pound)</strong></p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-slate-50 p-2.5 rounded border border-slate-200 text-center">
+          <div>
+            <span class="text-[8.5px] uppercase font-bold text-slate-400">Total Investment</span>
+            <p class="text-[10.5px] font-bold text-amber-700" id="pdf-dash-inv">£ 0.00</p>
+          </div>
+          <div>
+            <span class="text-[8.5px] uppercase font-bold text-slate-400">Total Income</span>
+            <p class="text-[10.5px] font-bold text-emerald-700" id="pdf-dash-inc">£ 0.00</p>
+          </div>
+          <div>
+            <span class="text-[8.5px] uppercase font-bold text-slate-400">Total Expense</span>
+            <p class="text-[10.5px] font-bold text-rose-700" id="pdf-dash-exp">£ 0.00</p>
+          </div>
+          <div>
+            <span class="text-[8.5px] uppercase font-bold text-slate-400">Net Profit / Loss</span>
+            <p class="text-[10.5px] font-bold" id="pdf-dash-net">£ 0.00</p>
+          </div>
+        </div>
+
+        <div class="space-y-1">
+          <h4 class="font-bold text-[11px] text-slate-800">Summary Breakdown by Month</h4>
+          <div id="pdf-summary-month-container" class="border border-slate-300 rounded overflow-hidden"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ALL TRANSACTIONS PDF MODAL -->
+  <div id="pdf-modal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-3">
+    <div class="bg-white rounded-xl max-w-4xl w-full p-4 sm:p-5 shadow-2xl space-y-3 max-h-[95vh] flex flex-col justify-between">
+      <div class="flex justify-between items-center border-b pb-2.5 no-print">
+        <div class="flex items-center gap-2">
+          <i class="fa-solid fa-file-pdf text-rose-600 text-base"></i>
+          <div>
+            <h3 class="font-bold text-slate-800 text-xs">Financial Transactions Report</h3>
+            <p class="text-[9.5px] text-slate-500" id="pdf-preview-subtitle">Transactions Breakdown</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="printPdfModal()" class="bg-rose-700 hover:bg-rose-800 text-white px-3 py-1 rounded font-semibold text-[10px] flex items-center gap-1 shadow transition">
+            <i class="fa-solid fa-print text-[9px]"></i> Print / Save as PDF
+          </button>
+          <button onclick="closePdfReportModal()" class="text-slate-400 hover:text-slate-600 px-1.5 py-0.5"><i class="fa-solid fa-xmark text-sm"></i></button>
+        </div>
+      </div>
+
+      <div id="pdf-printable-area" class="overflow-y-auto custom-scroll flex-1 pr-1 space-y-3 text-[10px]">
+        <div class="flex justify-between items-start border-b border-slate-200 pb-2.5">
+          <div>
+            <h1 class="text-sm font-bold text-slate-800">CALCULATION MASTER REPORT</h1>
+            <p class="text-[10px] text-slate-500" id="report-filter-tag">All Transactions Breakdown</p>
+          </div>
+          <div class="text-right text-[9.5px] text-slate-500">
+            <p>Generated: <span id="report-gen-date" class="font-semibold text-slate-700"></span></p>
+            <p>Currency: <strong class="text-slate-800">GBP (£ - UK Pound)</strong></p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-4 gap-2 bg-slate-50 p-2.5 rounded border border-slate-200 text-center">
+          <div>
+            <span class="text-[8.5px] uppercase font-bold text-slate-400">Total Investment</span>
+            <p class="text-[10.5px] font-bold text-amber-700" id="pdf-sum-inv">£ 0.00</p>
+          </div>
+          <div>
+            <span class="text-[8.5px] uppercase font-bold text-slate-400">Total Income</span>
+            <p class="text-[10.5px] font-bold text-emerald-700" id="pdf-sum-inc">£ 0.00</p>
+          </div>
+          <div>
+            <span class="text-[8.5px] uppercase font-bold text-slate-400">Total Expense</span>
+            <p class="text-[10.5px] font-bold text-rose-700" id="pdf-sum-exp">£ 0.00</p>
+          </div>
+          <div>
+            <span class="text-[8.5px] uppercase font-bold text-slate-400" id="pdf-net-label">Net Profit / Loss</span>
+            <p class="text-[10.5px] font-bold" id="pdf-sum-net">£ 0.00</p>
+          </div>
+        </div>
+
+        <div class="border border-slate-300 rounded overflow-hidden">
+          <table class="w-full text-left border-collapse text-[9.5px]">
+            <thead class="bg-red-700 text-white font-bold">
+              <tr>
+                <th class="p-1 border-r border-red-800 text-center">Date</th>
+                <th class="p-1 border-r border-red-800">Project</th>
+                <th class="p-1 border-r border-red-800">Type</th>
+                <th class="p-1 border-r border-red-800">Category / Source</th>
+                <th class="p-1 border-r border-red-800">Payment Via</th>
+                <th class="p-1 border-r border-red-800 text-right">Income (£)</th>
+                <th class="p-1 border-r border-red-800 text-right">Expense (£)</th>
+                <th class="p-1 border-r border-red-800 text-right">Withdrawal (Col V) (£)</th>
+                <th class="p-1">Remarks / Notes</th>
+              </tr>
+            </thead>
+            <tbody id="pdf-table-tbody" class="divide-y divide-slate-200"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADD TRANSACTION MODAL -->
+  <div id="tx-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-3">
+    <div class="bg-white rounded-xl max-w-md w-full p-3.5 shadow-2xl space-y-2 max-h-[90vh] overflow-y-auto text-[10px]">
+      <div class="flex justify-between items-center border-b pb-1.5">
+        <h3 class="font-bold text-slate-800 text-xs">+ Add Transaction</h3>
+        <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-sm"></i></button>
+      </div>
+
+      <form id="tx-form" onsubmit="submitTransaction(event)" class="space-y-2">
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block font-semibold text-slate-500 mb-0.5">Date</label>
+            <input type="date" id="m-date" required class="w-full border border-slate-300 rounded px-2 py-1 focus:outline-none">
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-500 mb-0.5">Project Name</label>
+            <select id="m-project" required class="w-full border border-slate-300 rounded px-2 py-1 bg-white"></select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-500 mb-0.5">Transaction Type</label>
+          <select id="m-type" onchange="toggleFormFields()" class="w-full border border-slate-300 rounded px-2 py-1 font-medium bg-slate-50">
+            <option value="Cash Outflow">Cash Outflow</option>
+            <option value="Cash Inflow">Cash Inflow</option>
+            <option value="Investment">Investment</option>
+            <option value="Withdrawal">Withdrawal</option>
+          </select>
+        </div>
+
+        <!-- INVESTMENT SECTION -->
+        <div id="section-investment" class="hidden space-y-1.5 p-2 bg-amber-50 rounded border border-amber-200">
+          <div class="relative" id="custom-cat-wrap-Investment">
+            <div class="flex items-center justify-between mb-0.5">
+              <label class="block font-semibold text-amber-800">Investment Type / Source <span class="text-slate-400 font-normal">(Optional)</span></label>
+            </div>
+            <div class="relative">
+              <input type="text" id="m-invType" placeholder="Type or select..." autocomplete="off" onfocus="showCatDropdown('Investment')" oninput="filterCatDropdown('Investment')" class="w-full border border-slate-300 rounded px-2 py-1 bg-white text-[10px] focus:outline-none focus:border-amber-500">
+              <button type="button" onclick="toggleCatDropdown('Investment')" class="absolute right-2 top-2 text-slate-400 hover:text-slate-600 text-[9px]"><i class="fa-solid fa-chevron-down"></i></button>
+            </div>
+            <div id="dropdown-Investment" class="hidden absolute left-0 right-0 mt-1 bg-white border border-slate-200 rounded shadow-xl z-50 max-h-48 overflow-y-auto text-[10px]"></div>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block font-semibold text-amber-800 mb-0.5">Through <span class="text-slate-400 font-normal">(Opt)</span></label>
+              <input type="text" id="m-invThrough" placeholder="Cash / Bank" class="w-full border border-slate-300 rounded px-2 py-1 bg-white">
+            </div>
+            <div>
+              <label class="block font-semibold text-amber-800 mb-0.5">Note <span class="text-slate-400 font-normal">(Opt)</span></label>
+              <input type="text" id="m-invNote" placeholder="Note" class="w-full border border-slate-300 rounded px-2 py-1 bg-white">
+            </div>
+          </div>
+        </div>
+
+        <!-- INCOME SECTION -->
+        <div id="section-income" class="hidden space-y-1.5 p-2 bg-rose-50 rounded border border-rose-200">
+          <div class="relative" id="custom-cat-wrap-Income">
+            <div class="flex items-center justify-between mb-0.5">
+              <label class="block font-semibold text-rose-800">Income Category <span class="text-slate-400 font-normal">(Optional)</span></label>
+            </div>
+            <div class="relative">
+              <input type="text" id="m-incCat" placeholder="Type or select..." autocomplete="off" onfocus="showCatDropdown('Income')" oninput="filterCatDropdown('Income')" class="w-full border border-slate-300 rounded px-2 py-1 bg-white text-[10px] focus:outline-none focus:border-rose-500">
+              <button type="button" onclick="toggleCatDropdown('Income')" class="absolute right-2 top-2 text-slate-400 hover:text-slate-600 text-[9px]"><i class="fa-solid fa-chevron-down"></i></button>
+            </div>
+            <div id="dropdown-Income" class="hidden absolute left-0 right-0 mt-1 bg-white border border-slate-200 rounded shadow-xl z-50 max-h-48 overflow-y-auto text-[10px]"></div>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block font-semibold text-rose-800 mb-0.5">Received Via <span class="text-slate-400 font-normal">(Opt)</span></label>
+              <input type="text" id="m-incVia" placeholder="Wise, Bank" class="w-full border border-slate-300 rounded px-2 py-1 bg-white">
+            </div>
+            <div>
+              <label class="block font-semibold text-rose-800 mb-0.5">Note For Income <span class="text-slate-400 font-normal">(Opt)</span></label>
+              <input type="text" id="m-incNote" placeholder="Client Payment" class="w-full border border-slate-300 rounded px-2 py-1 bg-white">
+            </div>
+          </div>
+        </div>
+
+        <!-- EXPENSE SECTION -->
+        <div id="section-expense" class="space-y-1.5 p-2 bg-emerald-50 rounded border border-emerald-200">
+          <div class="relative" id="custom-cat-wrap-Expense">
+            <div class="flex items-center justify-between mb-0.5">
+              <label class="block font-semibold text-emerald-800">Expense Category <span class="text-slate-400 font-normal">(Optional)</span></label>
+            </div>
+            <div class="relative">
+              <input type="text" id="m-expCat" placeholder="Type or select..." autocomplete="off" onfocus="showCatDropdown('Expense')" oninput="filterCatDropdown('Expense')" class="w-full border border-slate-300 rounded px-2 py-1 bg-white text-[10px] focus:outline-none focus:border-emerald-500">
+              <button type="button" onclick="toggleCatDropdown('Expense')" class="absolute right-2 top-2 text-slate-400 hover:text-slate-600 text-[9px]"><i class="fa-solid fa-chevron-down"></i></button>
+            </div>
+            <div id="dropdown-Expense" class="hidden absolute left-0 right-0 mt-1 bg-white border border-slate-200 rounded shadow-xl z-50 max-h-48 overflow-y-auto text-[10px]"></div>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block font-semibold text-emerald-800 mb-0.5">Paid Via <span class="text-slate-400 font-normal">(Opt)</span></label>
+              <input type="text" id="m-expVia" placeholder="Bank Transfer" class="w-full border border-slate-300 rounded px-2 py-1 bg-white">
+            </div>
+            <div>
+              <label class="block font-semibold text-emerald-800 mb-0.5">Note For Expense <span class="text-slate-400 font-normal">(Opt)</span></label>
+              <input type="text" id="m-expNote" placeholder="Salary, Rent..." class="w-full border border-slate-300 rounded px-2 py-1 bg-white">
+            </div>
+          </div>
+        </div>
+
+        <!-- WITHDRAWAL SECTION -->
+        <div id="section-withdrawal" class="hidden space-y-1.5 p-2 bg-indigo-50 rounded border border-indigo-200">
+          <p class="font-semibold text-indigo-800"><i class="fa-solid fa-money-bill-transfer mr-1"></i> Company Profit Withdrawal (Column V)</p>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-500 mb-0.5">Amount (£ Pound)</label>
+          <input type="number" step="any" id="m-amount" placeholder="0.00" required class="w-full border border-slate-300 rounded px-2 py-1 font-bold focus:outline-none">
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block font-semibold text-slate-500 mb-0.5">Important Link <span class="text-slate-400 font-normal">(Optional)</span></label>
+            <input type="text" id="m-link" placeholder="https://..." class="w-full border border-slate-300 rounded px-2 py-1">
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-500 mb-0.5">Receipt Link <span class="text-slate-400 font-normal">(Optional)</span></label>
+            <input type="text" id="m-receipt" placeholder="https://..." class="w-full border border-slate-300 rounded px-2 py-1">
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-500 mb-0.5">Description / Remarks <span class="text-slate-400 font-normal">(Optional)</span></label>
+          <input type="text" id="m-remarks" placeholder="Remarks..." class="w-full border border-slate-300 rounded px-2 py-1">
+        </div>
+
+        <div class="pt-1 flex justify-end gap-2">
+          <button type="button" onclick="closeModal()" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded font-medium">Cancel</button>
+          <button type="submit" id="btn-save" class="px-3 py-1 bg-sky-900 hover:bg-sky-800 text-white rounded font-medium shadow">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- JavaScript Logic -->
+  <script>
+    Chart.register(ChartDataLabels);
+
+    // ==========================================
+    // আপনার Apps Script Web App URL টি এখানে বসাবেন
+    // ==========================================
+    const BACKEND_URL = "https://script.google.com/macros/s/AKfycbzgigEVL2k05MgocX-JbgMry037AYl5fQxidI8iSBpJFC1pEqI0hcqsfJBWwWtM6vsTXQ/exec";
+
+    // গুগল স্ক্রিপ্টে ডাটা পাঠানো এবং গ্রহণ করার ফাংশন
+    async function callAPI(action, dataObj = {}) {
+      try {
+        const response = await fetch(BACKEND_URL, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({ action: action, ...dataObj })
+        });
+        return await response.json();
+      } catch (err) {
+        console.error("API Error:", err);
+        return null;
+      }
+    }
+
+    let allData = [];
+    let currentFilteredData = [];
+    let currentDashboardData = [];
+    let categories = { Project: [], Investment: [], Income: [], Expense: [] };
+    let trendChart = null;
+    let spreadsheetUrl = "";
+
+    let selectedDashProjects = [];
+    let selectedTxProjects = [];
+    let allProjectList = [];
+
+    let selectedDashCategories = [];
+    let selectedTxCategories = [];
+    let allCategoryList = [];
+
+    const ALL_TYPES_LIST = ['Cash Outflow', 'Cash Inflow', 'Investment', 'Withdrawal'];
+    let selectedDashTypes = [...ALL_TYPES_LIST];
+    let selectedTxTypes = [...ALL_TYPES_LIST];
+
+    let renderedTxCount = 0;
+    const TX_PAGE_SIZE = 25;
+
+    let isShowingAllCats = false;
+    let currentExpenseCats = [];
+    let currentTotalExpense = 0;
+
+    const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const FULL_MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    
+    const fmt = new Intl.NumberFormat('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const fmtShort = new Intl.NumberFormat('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+
+    function debounce(func, wait) {
+      let timeout;
+      return function(...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(this, args), wait);
+      };
+    }
+
+    function sanitizeUrl(rawUrl) {
+      if (!rawUrl) return '';
+      let url = String(rawUrl).trim();
+      if (!url) return '';
+      
+      if (url.toUpperCase().includes('HYPERLINK(')) {
+        const m = url.match(/"(https?:\/\/[^"]+)"/i) || url.match(/"([^"]+)"/);
+        if (m && m[1]) url = m[1].trim();
+      }
+
+      const lower = url.toLowerCase();
+      if (lower === 'not found' || lower === 'none' || lower === 'n/a' || lower === '-' || lower === 'null') {
+        return '';
+      }
+
+      if (!url.includes('.') && !url.includes('/')) {
+        return '';
+      }
+
+      if (!/^https?:\/\//i.test(url)) {
+        url = 'https://' + url;
+      }
+
+      if (url.includes('drive.google.com/file/d/')) {
+        url = url.replace(/\/view(\?.*)?$/i, '/view?usp=sharing');
+      }
+
+      return url;
+    }
+
+    window.onload = function() {
+      document.getElementById('m-date').valueAsDate = new Date();
+      startLiveClock();
+      loadData(false);
+
+      document.addEventListener('click', function(e) {
+        ['dash', 'tx'].forEach(type => {
+          ['project', 'type', 'category'].forEach(target => {
+            const multi = document.getElementById(`${type}-${target}-multiselect`);
+            if (multi && !multi.contains(e.target)) {
+              const panel = document.getElementById(`${type}-${target}-dropdown-panel`);
+              if (panel) panel.classList.add('hidden');
+            }
+          });
+        });
+
+        ['Investment', 'Income', 'Expense'].forEach(catType => {
+          const wrap = document.getElementById(`custom-cat-wrap-${catType}`);
+          if (wrap && !wrap.contains(e.target)) {
+            const drop = document.getElementById(`dropdown-${catType}`);
+            if (drop) drop.classList.add('hidden');
+          }
+        });
+      });
+    };
+
+    function loadData(force = false) {
+      callAPI("getInitialData", { forceRefresh: force }).then(data => {
+        if (data) {
+          applyInitialData(data);
+        }
+      });
+    }
+
+    function refreshAppData() {
+      loadData(true);
+    }
+
+    function applyInitialData(data) {
+      spreadsheetUrl = data.spreadsheetUrl || "";
+      categories = data.categories || { Project: [], Investment: [], Income: [], Expense: [] };
+      allData = data.transactions || [];
+
+      populateDropdowns();
+      populateFilters();
+      renderCategoryManager();
+
+      updateDashDynamicDropdowns();
+      applyDashFilters();
+      
+      updateTxDynamicDropdowns();
+      applyTxFilters();
+    }
+
+    function startLiveClock() {
+      const timeEl = document.getElementById('live-time');
+      const dateEl = document.getElementById('live-date');
+      function updateTime() {
+        const now = new Date();
+        timeEl.innerText = now.toLocaleTimeString('en-GB', { hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' }).toUpperCase();
+        dateEl.innerText = now.toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+      }
+      updateTime();
+      setInterval(updateTime, 1000);
+    }
+
+    function toggleMobileSidebar() {
+      document.getElementById('main-sidebar').classList.toggle('-translate-x-full');
+      document.getElementById('mobile-backdrop').classList.toggle('hidden');
+    }
+
+    function populateDropdowns() {
+      populateSelect('m-project', categories.Project || []);
+      renderCustomCategoryList('Investment');
+      renderCustomCategoryList('Income');
+      renderCustomCategoryList('Expense');
+    }
+
+    function populateSelect(elemId, list) {
+      const el = document.getElementById(elemId);
+      if (!list || list.length === 0) {
+        el.innerHTML = '<option value="General">General</option>';
+        return;
+      }
+      let opts = '';
+      for (let i = 0; i < list.length; i++) {
+        let name = typeof list[i] === 'object' ? list[i].name : list[i];
+        opts += `<option value="${name}">${name}</option>`;
+      }
+      el.innerHTML = opts;
+    }
+
+    function getCatInputId(type) {
+      if (type === 'Investment') return 'm-invType';
+      if (type === 'Income') return 'm-incCat';
+      if (type === 'Expense') return 'm-expCat';
+      return '';
+    }
+
+    function toggleCatDropdown(type) {
+      const dd = document.getElementById(`dropdown-${type}`);
+      if (dd.classList.contains('hidden')) {
+        showCatDropdown(type);
+      } else {
+        dd.classList.add('hidden');
+      }
+    }
+
+    function showCatDropdown(type) {
+      const dd = document.getElementById(`dropdown-${type}`);
+      filterCatDropdown(type);
+      dd.classList.remove('hidden');
+    }
+
+    function filterCatDropdown(type) {
+      const input = document.getElementById(getCatInputId(type));
+      const val = (input.value || '').toLowerCase().trim();
+      renderCustomCategoryList(type, val);
+    }
+
+    function renderCustomCategoryList(type, filterText = '') {
+      const dd = document.getElementById(`dropdown-${type}`);
+      if (!dd) return;
+
+      const items = categories[type] || [];
+      const filtered = items.filter(item => {
+        const name = typeof item === 'object' ? item.name : item;
+        return name.toLowerCase().includes(filterText);
+      });
+
+      let html = '';
+      html += `
+        <div onclick="selectCategoryValue('${type}', '')" class="px-2.5 py-1.5 hover:bg-slate-100 flex items-center justify-between cursor-pointer border-b border-slate-100 text-slate-500 italic">
+          <span>(No Category)</span>
+          <span class="text-[8.5px] bg-slate-200 px-1 py-0.5 rounded text-slate-600">None</span>
+        </div>
+      `;
+
+      if (filtered.length > 0) {
+        filtered.forEach(item => {
+          const name = typeof item === 'object' ? item.name : item;
+          const rowIndex = typeof item === 'object' ? item.rowIndex : null;
+          const safeName = name.replace(/'/g, "\\'");
+
+          html += `
+            <div class="px-2.5 py-1.5 hover:bg-slate-50 flex items-center justify-between cursor-pointer border-b border-slate-100 group transition">
+              <span onclick="selectCategoryValue('${type}', '${safeName}')" class="flex-1 font-medium text-slate-800 hover:text-sky-700 truncate pr-2">${name}</span>
+              <div class="flex items-center gap-2 shrink-0">
+                ${rowIndex ? `
+                  <button type="button" onclick="event.stopPropagation(); editCategoryDirectly(${rowIndex}, '${safeName}', '${type}')" title="Edit" class="text-amber-500 hover:text-amber-600 transition p-0.5">
+                    ✏️
+                  </button>
+                  <button type="button" onclick="event.stopPropagation(); deleteCategoryDirectly(${rowIndex}, '${safeName}', '${type}')" title="Delete" class="text-rose-500 hover:text-rose-600 font-bold transition p-0.5 text-xs">
+                    ❌
+                  </button>
+                ` : ''}
+              </div>
+            </div>
+          `;
+        });
+      } else {
+        html += `<div class="px-2.5 py-2 text-slate-400 text-center text-[9.5px]">No category found.</div>`;
+      }
+
+      if (filterText && !items.some(it => (typeof it === 'object' ? it.name : it).toLowerCase() === filterText)) {
+        html += `
+          <div onclick="addNewCategoryDirectly('${type}', '${filterText.replace(/'/g, "\\'")}')" class="px-2.5 py-1.5 bg-sky-50 hover:bg-sky-100 text-sky-800 font-bold cursor-pointer flex items-center gap-1.5 border-t border-sky-200">
+            <i class="fa-solid fa-plus text-[9px]"></i> <span>Add "${filterText}"</span>
+          </div>
+        `;
+      }
+
+      dd.innerHTML = html;
+    }
+
+    function selectCategoryValue(type, val) {
+      const input = document.getElementById(getCatInputId(type));
+      if (input) input.value = val;
+      const dd = document.getElementById(`dropdown-${type}`);
+      if (dd) dd.classList.add('hidden');
+    }
+
+    function addNewCategoryDirectly(type, name) {
+      if (!name) return;
+      selectCategoryValue(type, name);
+      callAPI("saveCategory", { type: type, name: name }).then(refreshAppData);
+    }
+
+    function editCategoryDirectly(rowIndex, currentName, type) {
+      const updatedName = prompt("Update Category Name:", currentName);
+      if (updatedName && updatedName.trim() !== "" && updatedName.trim() !== currentName) {
+        callAPI("updateCategory", { rowIndex: rowIndex, name: updatedName.trim() }).then(refreshAppData);
+      }
+    }
+
+    function deleteCategoryDirectly(rowIndex, name, type) {
+      if (confirm(`Are you sure you want to delete "${name}"?`)) {
+        const input = document.getElementById(getCatInputId(type));
+        if (input && input.value === name) input.value = '';
+        callAPI("deleteCategory", { rowIndex: rowIndex }).then(refreshAppData);
+      }
+    }
+
+    let draggedElement = null;
+
+    function handleDragStart(e) {
+      draggedElement = this;
+      this.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/html', this.innerHTML);
+    }
+
+    function handleDragOver(e) {
+      if (e.preventDefault) e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      return false;
+    }
+
+    function handleDragEnter(e) {
+      if (this !== draggedElement) {
+        this.classList.add('drag-over');
+      }
+    }
+
+    function handleDragLeave(e) {
+      this.classList.remove('drag-over');
+    }
+
+    function handleDrop(e) {
+      if (e.stopPropagation) e.stopPropagation();
+
+      if (draggedElement !== this && draggedElement.dataset.type === this.dataset.type) {
+        const parent = this.parentNode;
+        const allItems = Array.from(parent.querySelectorAll('.draggable-item'));
+        const fromIdx = allItems.indexOf(draggedElement);
+        const toIdx = allItems.indexOf(this);
+
+        if (fromIdx < toIdx) {
+          parent.insertBefore(draggedElement, this.nextSibling);
+        } else {
+          parent.insertBefore(draggedElement, this);
+        }
+
+        const type = this.dataset.type;
+        const updatedList = Array.from(parent.querySelectorAll('.draggable-item')).map(el => el.dataset.name);
+        
+        categories[type] = updatedList.map((nm, idx) => ({ rowIndex: idx + 2, name: nm }));
+        populateFilters();
+        populateDropdowns();
+
+        callAPI("reorderCategory", { type: type, namesList: updatedList }).then(refreshAppData);
+      }
+      this.classList.remove('drag-over');
+      return false;
+    }
+
+    function handleDragEnd(e) {
+      this.classList.remove('dragging');
+      document.querySelectorAll('.draggable-item').forEach(el => el.classList.remove('drag-over'));
+    }
+
+    function renderCategoryManager() {
+      const container = document.getElementById('cat-list-display');
+      const sections = [
+        { key: 'Project', title: 'Projects', color: 'text-sky-600' },
+        { key: 'Investment', title: 'Investment Types', color: 'text-amber-600' },
+        { key: 'Income', title: 'Income Categories', color: 'text-emerald-600' },
+        { key: 'Expense', title: 'Expense Categories', color: 'text-rose-600' }
+      ];
+
+      let fullHtml = '';
+      sections.forEach(s => {
+        const items = categories[s.key] || [];
+        let itemsHtml = items.map((item, idx) => `
+          <li class="draggable-item bg-slate-50 hover:bg-slate-100 border border-slate-200 px-2 py-1.5 rounded text-slate-700 flex justify-between items-center transition group text-[10px]" 
+              draggable="true" 
+              data-type="${s.key}" 
+              data-name="${item.name}" 
+              data-index="${idx}">
+            <div class="flex items-center gap-2 truncate pr-2">
+              <span class="drag-handle text-slate-400 group-hover:text-sky-600 px-0.5 cursor-grab text-[11px]" title="Mouse দিয়ে টেনে উপরে বা নিচে নিন">
+                <i class="fa-solid fa-grip-vertical"></i>
+              </span>
+              <span class="font-medium truncate">${item.name}</span>
+            </div>
+            <div class="flex items-center gap-1.5 shrink-0">
+              <button onclick="editCategoryPrompt(${item.rowIndex}, '${item.name.replace(/'/g, "\\'")}')" class="text-blue-500 hover:text-blue-700 px-1 py-0.5 rounded" title="Edit"><i class="fa-solid fa-pen-to-square text-[9.5px]"></i></button>
+              <button onclick="deleteCategoryPrompt(${item.rowIndex}, '${item.name.replace(/'/g, "\\'")}')" class="text-rose-500 hover:text-rose-700 px-1 py-0.5 rounded" title="Delete"><i class="fa-solid fa-trash-can text-[9.5px]"></i></button>
+            </div>
+          </li>
+        `).join('');
+
+        fullHtml += `
+          <div class="border border-slate-200 rounded p-2 bg-white">
+            <h4 class="font-bold text-[10.5px] ${s.color} mb-1 flex justify-between items-center border-b pb-1">
+              <span>${s.title}</span>
+              <span class="bg-slate-100 text-slate-600 px-1.5 rounded-full text-[9px]">${items.length}</span>
+            </h4>
+            <ul class="space-y-1 max-h-40 overflow-y-auto pr-1" id="sortable-${s.key}">
+              ${itemsHtml || '<li class="text-slate-400 text-[9.5px] py-1 text-center">Empty</li>'}
+            </ul>
+          </div>
+        `;
+      });
+      container.innerHTML = fullHtml;
+
+      document.querySelectorAll('.draggable-item').forEach(item => {
+        item.addEventListener('dragstart', handleDragStart, false);
+        item.addEventListener('dragenter', handleDragEnter, false);
+        item.addEventListener('dragover', handleDragOver, false);
+        item.addEventListener('dragleave', handleDragLeave, false);
+        item.addEventListener('drop', handleDrop, false);
+        item.addEventListener('dragend', handleDragEnd, false);
+      });
+    }
+
+    function editCategoryPrompt(rowIndex, name) {
+      const updated = prompt("New category name:", name);
+      if (updated && updated.trim() && updated.trim() !== name) {
+        callAPI("updateCategory", { rowIndex: rowIndex, name: updated.trim() }).then(refreshAppData);
+      }
+    }
+
+    function deleteCategoryPrompt(rowIndex, name) {
+      if (confirm(`Delete "${name}"?`)) {
+        callAPI("deleteCategory", { rowIndex: rowIndex }).then(refreshAppData);
+      }
+    }
+
+    function populateFilters() {
+      allProjectList = (categories.Project || []).map(p => typeof p === 'object' ? p.name : p);
+
+      const orderedCats = [];
+      const catTracker = new Set();
+      ['Investment', 'Income', 'Expense'].forEach(k => {
+        (categories[k] || []).forEach(c => {
+          let name = typeof c === 'object' ? c.name : c;
+          if (name && !catTracker.has(name)) {
+            catTracker.add(name);
+            orderedCats.push(name);
+          }
+        });
+      });
+      allCategoryList = orderedCats;
+      
+      selectedDashProjects = [...allProjectList];
+      selectedTxProjects = [...allProjectList];
+      selectedDashCategories = [...allCategoryList];
+      selectedTxCategories = [...allCategoryList];
+
+      selectedDashTypes = [...ALL_TYPES_LIST];
+      selectedTxTypes = [...ALL_TYPES_LIST];
+
+      renderMultiSelectOptions('dash', 'project');
+      renderMultiSelectOptions('dash', 'type');
+      renderMultiSelectOptions('dash', 'category');
+
+      renderMultiSelectOptions('tx', 'project');
+      renderMultiSelectOptions('tx', 'type');
+      renderMultiSelectOptions('tx', 'category');
+      
+      updateDashDynamicDropdowns();
+      updateTxDynamicDropdowns();
+    }
+
+    function getCategoriesForProjects(selectedProjects, fullList) {
+      if (!selectedProjects || selectedProjects.length === 0 || selectedProjects.length === allProjectList.length) {
+        return fullList;
+      }
+      const matchedCats = new Set();
+      for (let i = 0; i < allData.length; i++) {
+        const d = allData[i];
+        if (selectedProjects.includes(d.project)) {
+          if (d.incCat) matchedCats.add(d.incCat);
+          if (d.expCat) matchedCats.add(d.expCat);
+          if (d.invType) matchedCats.add(d.invType);
+        }
+      }
+      return fullList.filter(c => matchedCats.has(c));
+    }
+
+    function formatPrettyDate(rawDateStr) {
+      if (!rawDateStr || !rawDateStr.includes('-')) return rawDateStr;
+      const parts = rawDateStr.split('-');
+      if (parts.length === 3) {
+        const day = parseInt(parts[2], 10);
+        const monthIndex = parseInt(parts[1], 10) - 1;
+        const year = parts[0];
+        return `${day} ${FULL_MONTH_NAMES[monthIndex] || parts[1]} ${year}`;
+      }
+      return rawDateStr;
+    }
+
+    function updateDashDynamicDropdowns() {
+      const elYear = document.getElementById('dash-year-select');
+      const elFromM = document.getElementById('dash-from-month');
+      const elToM = document.getElementById('dash-to-month');
+      const durationTextEl = document.getElementById('dash-duration-text');
+
+      const prevYear = elYear.value;
+      const prevFromM = elFromM.value;
+      const prevToM = elToM.value;
+
+      const uniqueYears = new Set();
+      const uniqueMonths = new Set();
+
+      let minDate = "";
+      let maxDate = "";
+
+      const isAllProjects = (selectedDashProjects.length === 0 || selectedDashProjects.length === allProjectList.length);
+
+      for (let i = 0; i < allData.length; i++) {
+        const d = allData[i];
+        if (isAllProjects || selectedDashProjects.includes(d.project)) {
+          if (d.date && d.date.includes('/')) {
+            const parts = d.date.split('/');
+            if (parts[1]) uniqueMonths.add(parts[1]);
+            if (parts[2]) uniqueYears.add(parts[2]);
+          }
+          if (d.rawDate && d.rawDate.includes('-')) {
+            if (!minDate || d.rawDate < minDate) minDate = d.rawDate;
+            if (!maxDate || d.rawDate > maxDate) maxDate = d.rawDate;
+          }
+        }
+      }
+
+      if (minDate && maxDate) {
+        durationTextEl.innerText = `Running: ${formatPrettyDate(minDate)} to ${formatPrettyDate(maxDate)}`;
+      } else {
+        durationTextEl.innerText = "Running: All Time Records";
+      }
+
+      let yearOpts = '<option value="">All Years</option>';
+      const sortedYears = Array.from(uniqueYears).sort((a, b) => b - a);
+      sortedYears.forEach(y => {
+        yearOpts += `<option value="${y}">${y}</option>`;
+      });
+      elYear.innerHTML = yearOpts;
+      elYear.value = uniqueYears.has(prevYear) ? prevYear : "";
+
+      let fromMOpts = '<option value="">From</option>';
+      let toMOpts = '<option value="">To</option>';
+      const sortedMonths = Array.from(uniqueMonths).sort((a, b) => Number(a) - Number(b));
+
+      sortedMonths.forEach(m => {
+        const mName = MONTH_NAMES[parseInt(m, 10) - 1] || m;
+        fromMOpts += `<option value="${m}">${mName}</option>`;
+        toMOpts += `<option value="${m}">${mName}</option>`;
+      });
+      elFromM.innerHTML = fromMOpts;
+      elToM.innerHTML = toMOpts;
+      elFromM.value = uniqueMonths.has(prevFromM) ? prevFromM : "";
+      elToM.value = uniqueMonths.has(prevToM) ? prevToM : "";
+
+      const dynamicCats = getCategoriesForProjects(selectedDashProjects, allCategoryList);
+      selectedDashCategories = selectedDashCategories.filter(c => dynamicCats.includes(c));
+      if (selectedDashCategories.length === 0) {
+        selectedDashCategories = [...dynamicCats];
+        const selectAllCatChk = document.getElementById('dash-select-all-cat');
+        if (selectAllCatChk) selectAllCatChk.checked = true;
+      }
+      
+      renderMultiSelectOptionsForList('dash', 'category', dynamicCats, selectedDashCategories);
+    }
+
+    function updateTxDynamicDropdowns() {
+      const elYear = document.getElementById('tx-filter-year');
+      const elFromM = document.getElementById('tx-from-month');
+      const elToM = document.getElementById('tx-to-month');
+
+      const prevYear = elYear.value;
+      const prevFromM = elFromM.value;
+      const prevToM = elToM.value;
+
+      const uniqueYears = new Set();
+      const uniqueMonths = new Set();
+
+      const isAllProjects = (selectedTxProjects.length === 0 || selectedTxProjects.length === allProjectList.length);
+
+      for (let i = 0; i < allData.length; i++) {
+        const d = allData[i];
+        if (isAllProjects || selectedTxProjects.includes(d.project)) {
+          if (d.date && d.date.includes('/')) {
+            const parts = d.date.split('/');
+            if (parts[1]) uniqueMonths.add(parts[1]);
+            if (parts[2]) uniqueYears.add(parts[2]);
+          }
+        }
+      }
+
+      let yearOpts = '<option value="">All Years</option>';
+      const sortedYears = Array.from(uniqueYears).sort((a, b) => b - a);
+      sortedYears.forEach(y => {
+        yearOpts += `<option value="${y}">${y}</option>`;
+      });
+      elYear.innerHTML = yearOpts;
+      elYear.value = uniqueYears.has(prevYear) ? prevYear : "";
+
+      let fromMOpts = '<option value="">From</option>';
+      let toMOpts = '<option value="">To</option>';
+      const sortedMonths = Array.from(uniqueMonths).sort((a, b) => Number(a) - Number(b));
+
+      sortedMonths.forEach(m => {
+        const mName = MONTH_NAMES[parseInt(m, 10) - 1] || m;
+        fromMOpts += `<option value="${m}">${mName}</option>`;
+        toMOpts += `<option value="${m}">${mName}</option>`;
+      });
+      elFromM.innerHTML = fromMOpts;
+      elToM.innerHTML = toMOpts;
+      elFromM.value = uniqueMonths.has(prevFromM) ? prevFromM : "";
+      elToM.value = uniqueMonths.has(prevToM) ? prevToM : "";
+
+      const dynamicCats = getCategoriesForProjects(selectedTxProjects, allCategoryList);
+      selectedTxCategories = selectedTxCategories.filter(c => dynamicCats.includes(c));
+      if (selectedTxCategories.length === 0) {
+        selectedTxCategories = [...dynamicCats];
+        const selectAllCatChk = document.getElementById('tx-select-all-cat');
+        if (selectAllCatChk) selectAllCatChk.checked = true;
+      }
+
+      renderMultiSelectOptionsForList('tx', 'category', dynamicCats, selectedTxCategories);
+    }
+
+    function toggleMultiSelectDropdown(type, target) {
+      document.getElementById(`${type}-${target}-dropdown-panel`).classList.toggle('hidden');
+    }
+
+    function renderMultiSelectOptions(type, target) {
+      let listData = [];
+      let selectedList = [];
+
+      if (target === 'project') {
+        listData = allProjectList;
+        selectedList = (type === 'dash') ? selectedDashProjects : selectedTxProjects;
+      } else if (target === 'type') {
+        listData = ALL_TYPES_LIST;
+        selectedList = (type === 'dash') ? selectedDashTypes : selectedTxTypes;
+      } else {
+        listData = allCategoryList;
+        selectedList = (type === 'dash') ? selectedDashCategories : selectedTxCategories;
+      }
+
+      renderMultiSelectOptionsForList(type, target, listData, selectedList);
+    }
+
+    function renderMultiSelectOptionsForList(type, target, listData, selectedList) {
+      const container = document.getElementById(`${type}-${target}-checkbox-list`);
+      if (!container)

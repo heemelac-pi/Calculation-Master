@@ -829,4 +829,1636 @@
               <input type="text" id="m-expCat" placeholder="Type or select..." autocomplete="off" onfocus="showCatDropdown('Expense')" oninput="filterCatDropdown('Expense')" class="w-full border border-slate-300 rounded px-2 py-1 bg-white text-[10px] focus:outline-none focus:border-emerald-500">
               <button type="button" onclick="toggleCatDropdown('Expense')" class="absolute right-2 top-2 text-slate-400 hover:text-slate-600 text-[9px]"><i class="fa-solid fa-chevron-down"></i></button>
             </div>
-            <div id="dropdown-Expense" class="hidden absolute left-0 right-0 mt-1 bg-white border border-slate-200 rounded shadow-xl z-50 max-h-48
+            <div id="dropdown-Expense" class="hidden absolute left-0 right-0 mt-1 bg-white border border-slate-200 rounded shadow-xl z-50 max-h-48 overflow-y-auto text-[10px]"></div>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block font-semibold text-emerald-800 mb-0.5">Paid Via <span class="text-slate-400 font-normal">(Opt)</span></label>
+              <input type="text" id="m-expVia" placeholder="Bank Transfer" class="w-full border border-slate-300 rounded px-2 py-1 bg-white">
+            </div>
+            <div>
+              <label class="block font-semibold text-emerald-800 mb-0.5">Note For Expense <span class="text-slate-400 font-normal">(Opt)</span></label>
+              <input type="text" id="m-expNote" placeholder="Salary, Rent..." class="w-full border border-slate-300 rounded px-2 py-1 bg-white">
+            </div>
+          </div>
+        </div>
+
+        <!-- WITHDRAWAL SECTION -->
+        <div id="section-withdrawal" class="hidden space-y-1.5 p-2 bg-indigo-50 rounded border border-indigo-200">
+          <p class="font-semibold text-indigo-800"><i class="fa-solid fa-money-bill-transfer mr-1"></i> Company Profit Withdrawal (Column V)</p>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-500 mb-0.5">Amount (£ Pound)</label>
+          <input type="number" step="any" id="m-amount" placeholder="0.00" required class="w-full border border-slate-300 rounded px-2 py-1 font-bold focus:outline-none">
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block font-semibold text-slate-500 mb-0.5">Important Link <span class="text-slate-400 font-normal">(Optional)</span></label>
+            <input type="text" id="m-link" placeholder="https://..." class="w-full border border-slate-300 rounded px-2 py-1">
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-500 mb-0.5">Receipt Link <span class="text-slate-400 font-normal">(Optional)</span></label>
+            <input type="text" id="m-receipt" placeholder="https://..." class="w-full border border-slate-300 rounded px-2 py-1">
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-500 mb-0.5">Description / Remarks <span class="text-slate-400 font-normal">(Optional)</span></label>
+          <input type="text" id="m-remarks" placeholder="Remarks..." class="w-full border border-slate-300 rounded px-2 py-1">
+        </div>
+
+        <div class="pt-1 flex justify-end gap-2">
+          <button type="button" onclick="closeModal()" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded font-medium">Cancel</button>
+          <button type="submit" id="btn-save" class="px-3 py-1 bg-sky-900 hover:bg-sky-800 text-white rounded font-medium shadow">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- JavaScript Logic -->
+  <script>
+    Chart.register(ChartDataLabels);
+
+    const BACKEND_URL = "https://script.google.com/macros/s/AKfycbzgigEVL2k05MgocX-JbgMry037AYl5fQxidI8iSBpJFC1pEqI0hcqsfJBWwWtM6vsTXQ/exec";
+
+    // নির্ভরযোগ্য API কল ফাংশন (GET & POST আলাদা)
+    async function callAPI(action, dataObj = {}) {
+      try {
+        if (action === "getInitialData") {
+          const url = `${BACKEND_URL}?action=getInitialData&forceRefresh=${dataObj.forceRefresh ? "true" : "false"}&t=${Date.now()}`;
+          const response = await fetch(url);
+          return await response.json();
+        } else {
+          const response = await fetch(BACKEND_URL, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ action: action, ...dataObj })
+          });
+          return await response.json();
+        }
+      } catch (err) {
+        console.error("API Error:", err);
+        return null;
+      }
+    }
+
+    let allData = [];
+    let currentFilteredData = [];
+    let currentDashboardData = [];
+    let categories = { Project: [], Investment: [], Income: [], Expense: [] };
+    let trendChart = null;
+    let spreadsheetUrl = "";
+
+    let selectedDashProjects = [];
+    let selectedTxProjects = [];
+    let allProjectList = [];
+
+    let selectedDashCategories = [];
+    let selectedTxCategories = [];
+    let allCategoryList = [];
+
+    const ALL_TYPES_LIST = ['Cash Outflow', 'Cash Inflow', 'Investment', 'Withdrawal'];
+    let selectedDashTypes = [...ALL_TYPES_LIST];
+    let selectedTxTypes = [...ALL_TYPES_LIST];
+
+    let renderedTxCount = 0;
+    const TX_PAGE_SIZE = 25;
+
+    let isShowingAllCats = false;
+    let currentExpenseCats = [];
+    let currentTotalExpense = 0;
+
+    const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const FULL_MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    
+    const fmt = new Intl.NumberFormat('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const fmtShort = new Intl.NumberFormat('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+
+    function debounce(func, wait) {
+      let timeout;
+      return function(...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(this, args), wait);
+      };
+    }
+
+    function sanitizeUrl(rawUrl) {
+      if (!rawUrl) return '';
+      let url = String(rawUrl).trim();
+      if (!url) return '';
+      
+      if (url.toUpperCase().includes('HYPERLINK(')) {
+        const m = url.match(/"(https?:\/\/[^"]+)"/i) || url.match(/"([^"]+)"/);
+        if (m && m[1]) url = m[1].trim();
+      }
+
+      const lower = url.toLowerCase();
+      if (lower === 'not found' || lower === 'none' || lower === 'n/a' || lower === '-' || lower === 'null') {
+        return '';
+      }
+
+      if (!url.includes('.') && !url.includes('/')) {
+        return '';
+      }
+
+      if (!/^https?:\/\//i.test(url)) {
+        url = 'https://' + url;
+      }
+
+      if (url.includes('drive.google.com/file/d/')) {
+        url = url.replace(/\/view(\?.*)?$/i, '/view?usp=sharing');
+      }
+
+      return url;
+    }
+
+    window.onload = function() {
+      document.getElementById('m-date').valueAsDate = new Date();
+      startLiveClock();
+      loadData(false);
+
+      document.addEventListener('click', function(e) {
+        ['dash', 'tx'].forEach(type => {
+          ['project', 'type', 'category'].forEach(target => {
+            const multi = document.getElementById(`${type}-${target}-multiselect`);
+            if (multi && !multi.contains(e.target)) {
+              const panel = document.getElementById(`${type}-${target}-dropdown-panel`);
+              if (panel) panel.classList.add('hidden');
+            }
+          });
+        });
+
+        ['Investment', 'Income', 'Expense'].forEach(catType => {
+          const wrap = document.getElementById(`custom-cat-wrap-${catType}`);
+          if (wrap && !wrap.contains(e.target)) {
+            const drop = document.getElementById(`dropdown-${catType}`);
+            if (drop) drop.classList.add('hidden');
+          }
+        });
+      });
+    };
+
+    function loadData(force = false) {
+      callAPI("getInitialData", { forceRefresh: force }).then(data => {
+        if (data) {
+          applyInitialData(data);
+        }
+      });
+    }
+
+    function refreshAppData() {
+      loadData(true);
+    }
+
+    function applyInitialData(data) {
+      spreadsheetUrl = data.spreadsheetUrl || "";
+      categories = data.categories || { Project: [], Investment: [], Income: [], Expense: [] };
+      allData = data.transactions || [];
+
+      populateDropdowns();
+      populateFilters();
+      renderCategoryManager();
+
+      updateDashDynamicDropdowns();
+      applyDashFilters();
+      
+      updateTxDynamicDropdowns();
+      applyTxFilters();
+    }
+
+    function startLiveClock() {
+      const timeEl = document.getElementById('live-time');
+      const dateEl = document.getElementById('live-date');
+      function updateTime() {
+        const now = new Date();
+        timeEl.innerText = now.toLocaleTimeString('en-GB', { hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' }).toUpperCase();
+        dateEl.innerText = now.toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+      }
+      updateTime();
+      setInterval(updateTime, 1000);
+    }
+
+    function toggleMobileSidebar() {
+      document.getElementById('main-sidebar').classList.toggle('-translate-x-full');
+      document.getElementById('mobile-backdrop').classList.toggle('hidden');
+    }
+
+    function populateDropdowns() {
+      populateSelect('m-project', categories.Project || []);
+      renderCustomCategoryList('Investment');
+      renderCustomCategoryList('Income');
+      renderCustomCategoryList('Expense');
+    }
+
+    function populateSelect(elemId, list) {
+      const el = document.getElementById(elemId);
+      if (!list || list.length === 0) {
+        el.innerHTML = '<option value="General">General</option>';
+        return;
+      }
+      let opts = '';
+      for (let i = 0; i < list.length; i++) {
+        let name = typeof list[i] === 'object' ? list[i].name : list[i];
+        opts += `<option value="${name}">${name}</option>`;
+      }
+      el.innerHTML = opts;
+    }
+
+    function getCatInputId(type) {
+      if (type === 'Investment') return 'm-invType';
+      if (type === 'Income') return 'm-incCat';
+      if (type === 'Expense') return 'm-expCat';
+      return '';
+    }
+
+    function toggleCatDropdown(type) {
+      const dd = document.getElementById(`dropdown-${type}`);
+      if (dd.classList.contains('hidden')) {
+        showCatDropdown(type);
+      } else {
+        dd.classList.add('hidden');
+      }
+    }
+
+    function showCatDropdown(type) {
+      const dd = document.getElementById(`dropdown-${type}`);
+      filterCatDropdown(type);
+      dd.classList.remove('hidden');
+    }
+
+    function filterCatDropdown(type) {
+      const input = document.getElementById(getCatInputId(type));
+      const val = (input.value || '').toLowerCase().trim();
+      renderCustomCategoryList(type, val);
+    }
+
+    function renderCustomCategoryList(type, filterText = '') {
+      const dd = document.getElementById(`dropdown-${type}`);
+      if (!dd) return;
+
+      const items = categories[type] || [];
+      const filtered = items.filter(item => {
+        const name = typeof item === 'object' ? item.name : item;
+        return name.toLowerCase().includes(filterText);
+      });
+
+      let html = '';
+      html += `
+        <div onclick="selectCategoryValue('${type}', '')" class="px-2.5 py-1.5 hover:bg-slate-100 flex items-center justify-between cursor-pointer border-b border-slate-100 text-slate-500 italic">
+          <span>(No Category)</span>
+          <span class="text-[8.5px] bg-slate-200 px-1 py-0.5 rounded text-slate-600">None</span>
+        </div>
+      `;
+
+      if (filtered.length > 0) {
+        filtered.forEach(item => {
+          const name = typeof item === 'object' ? item.name : item;
+          const rowIndex = typeof item === 'object' ? item.rowIndex : null;
+          const safeName = name.replace(/'/g, "\\'");
+
+          html += `
+            <div class="px-2.5 py-1.5 hover:bg-slate-50 flex items-center justify-between cursor-pointer border-b border-slate-100 group transition">
+              <span onclick="selectCategoryValue('${type}', '${safeName}')" class="flex-1 font-medium text-slate-800 hover:text-sky-700 truncate pr-2">${name}</span>
+              <div class="flex items-center gap-2 shrink-0">
+                ${rowIndex ? `
+                  <button type="button" onclick="event.stopPropagation(); editCategoryDirectly(${rowIndex}, '${safeName}', '${type}')" title="Edit" class="text-amber-500 hover:text-amber-600 transition p-0.5">
+                    ✏️
+                  </button>
+                  <button type="button" onclick="event.stopPropagation(); deleteCategoryDirectly(${rowIndex}, '${safeName}', '${type}')" title="Delete" class="text-rose-500 hover:text-rose-600 font-bold transition p-0.5 text-xs">
+                    ❌
+                  </button>
+                ` : ''}
+              </div>
+            </div>
+          `;
+        });
+      } else {
+        html += `<div class="px-2.5 py-2 text-slate-400 text-center text-[9.5px]">No category found.</div>`;
+      }
+
+      if (filterText && !items.some(it => (typeof it === 'object' ? it.name : it).toLowerCase() === filterText)) {
+        html += `
+          <div onclick="addNewCategoryDirectly('${type}', '${filterText.replace(/'/g, "\\'")}')" class="px-2.5 py-1.5 bg-sky-50 hover:bg-sky-100 text-sky-800 font-bold cursor-pointer flex items-center gap-1.5 border-t border-sky-200">
+            <i class="fa-solid fa-plus text-[9px]"></i> <span>Add "${filterText}"</span>
+          </div>
+        `;
+      }
+
+      dd.innerHTML = html;
+    }
+
+    function selectCategoryValue(type, val) {
+      const input = document.getElementById(getCatInputId(type));
+      if (input) input.value = val;
+      const dd = document.getElementById(`dropdown-${type}`);
+      if (dd) dd.classList.add('hidden');
+    }
+
+    function addNewCategoryDirectly(type, name) {
+      if (!name) return;
+      selectCategoryValue(type, name);
+      callAPI("saveCategory", { type: type, name: name }).then(refreshAppData);
+    }
+
+    function editCategoryDirectly(rowIndex, currentName, type) {
+      const updatedName = prompt("Update Category Name:", currentName);
+      if (updatedName && updatedName.trim() !== "" && updatedName.trim() !== currentName) {
+        callAPI("updateCategory", { rowIndex: rowIndex, name: updatedName.trim() }).then(refreshAppData);
+      }
+    }
+
+    function deleteCategoryDirectly(rowIndex, name, type) {
+      if (confirm(`Are you sure you want to delete "${name}"?`)) {
+        const input = document.getElementById(getCatInputId(type));
+        if (input && input.value === name) input.value = '';
+        callAPI("deleteCategory", { rowIndex: rowIndex }).then(refreshAppData);
+      }
+    }
+
+    let draggedElement = null;
+
+    function handleDragStart(e) {
+      draggedElement = this;
+      this.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/html', this.innerHTML);
+    }
+
+    function handleDragOver(e) {
+      if (e.preventDefault) e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      return false;
+    }
+
+    function handleDragEnter(e) {
+      if (this !== draggedElement) {
+        this.classList.add('drag-over');
+      }
+    }
+
+    function handleDragLeave(e) {
+      this.classList.remove('drag-over');
+    }
+
+    function handleDrop(e) {
+      if (e.stopPropagation) e.stopPropagation();
+
+      if (draggedElement !== this && draggedElement.dataset.type === this.dataset.type) {
+        const parent = this.parentNode;
+        const allItems = Array.from(parent.querySelectorAll('.draggable-item'));
+        const fromIdx = allItems.indexOf(draggedElement);
+        const toIdx = allItems.indexOf(this);
+
+        if (fromIdx < toIdx) {
+          parent.insertBefore(draggedElement, this.nextSibling);
+        } else {
+          parent.insertBefore(draggedElement, this);
+        }
+
+        const type = this.dataset.type;
+        const updatedList = Array.from(parent.querySelectorAll('.draggable-item')).map(el => el.dataset.name);
+        
+        categories[type] = updatedList.map((nm, idx) => ({ rowIndex: idx + 2, name: nm }));
+        populateFilters();
+        populateDropdowns();
+
+        callAPI("reorderCategory", { type: type, namesList: updatedList }).then(refreshAppData);
+      }
+      this.classList.remove('drag-over');
+      return false;
+    }
+
+    function handleDragEnd(e) {
+      this.classList.remove('dragging');
+      document.querySelectorAll('.draggable-item').forEach(el => el.classList.remove('drag-over'));
+    }
+
+    function renderCategoryManager() {
+      const container = document.getElementById('cat-list-display');
+      const sections = [
+        { key: 'Project', title: 'Projects', color: 'text-sky-600' },
+        { key: 'Investment', title: 'Investment Types', color: 'text-amber-600' },
+        { key: 'Income', title: 'Income Categories', color: 'text-emerald-600' },
+        { key: 'Expense', title: 'Expense Categories', color: 'text-rose-600' }
+      ];
+
+      let fullHtml = '';
+      sections.forEach(s => {
+        const items = categories[s.key] || [];
+        let itemsHtml = items.map((item, idx) => `
+          <li class="draggable-item bg-slate-50 hover:bg-slate-100 border border-slate-200 px-2 py-1.5 rounded text-slate-700 flex justify-between items-center transition group text-[10px]" 
+              draggable="true" 
+              data-type="${s.key}" 
+              data-name="${item.name}" 
+              data-index="${idx}">
+            <div class="flex items-center gap-2 truncate pr-2">
+              <span class="drag-handle text-slate-400 group-hover:text-sky-600 px-0.5 cursor-grab text-[11px]" title="Mouse দিয়ে টেনে উপরে বা নিচে নিন">
+                <i class="fa-solid fa-grip-vertical"></i>
+              </span>
+              <span class="font-medium truncate">${item.name}</span>
+            </div>
+            <div class="flex items-center gap-1.5 shrink-0">
+              <button onclick="editCategoryPrompt(${item.rowIndex}, '${item.name.replace(/'/g, "\\'")}')" class="text-blue-500 hover:text-blue-700 px-1 py-0.5 rounded" title="Edit"><i class="fa-solid fa-pen-to-square text-[9.5px]"></i></button>
+              <button onclick="deleteCategoryPrompt(${item.rowIndex}, '${item.name.replace(/'/g, "\\'")}')" class="text-rose-500 hover:text-rose-700 px-1 py-0.5 rounded" title="Delete"><i class="fa-solid fa-trash-can text-[9.5px]"></i></button>
+            </div>
+          </li>
+        `).join('');
+
+        fullHtml += `
+          <div class="border border-slate-200 rounded p-2 bg-white">
+            <h4 class="font-bold text-[10.5px] ${s.color} mb-1 flex justify-between items-center border-b pb-1">
+              <span>${s.title}</span>
+              <span class="bg-slate-100 text-slate-600 px-1.5 rounded-full text-[9px]">${items.length}</span>
+            </h4>
+            <ul class="space-y-1 max-h-40 overflow-y-auto pr-1" id="sortable-${s.key}">
+              ${itemsHtml || '<li class="text-slate-400 text-[9.5px] py-1 text-center">Empty</li>'}
+            </ul>
+          </div>
+        `;
+      });
+      container.innerHTML = fullHtml;
+
+      document.querySelectorAll('.draggable-item').forEach(item => {
+        item.addEventListener('dragstart', handleDragStart, false);
+        item.addEventListener('dragenter', handleDragEnter, false);
+        item.addEventListener('dragover', handleDragOver, false);
+        item.addEventListener('dragleave', handleDragLeave, false);
+        item.addEventListener('drop', handleDrop, false);
+        item.addEventListener('dragend', handleDragEnd, false);
+      });
+    }
+
+    function editCategoryPrompt(rowIndex, name) {
+      const updated = prompt("New category name:", name);
+      if (updated && updated.trim() && updated.trim() !== name) {
+        callAPI("updateCategory", { rowIndex: rowIndex, name: updated.trim() }).then(refreshAppData);
+      }
+    }
+
+    function deleteCategoryPrompt(rowIndex, name) {
+      if (confirm(`Delete "${name}"?`)) {
+        callAPI("deleteCategory", { rowIndex: rowIndex }).then(refreshAppData);
+      }
+    }
+
+    function populateFilters() {
+      allProjectList = (categories.Project || []).map(p => typeof p === 'object' ? p.name : p);
+
+      const orderedCats = [];
+      const catTracker = new Set();
+      ['Investment', 'Income', 'Expense'].forEach(k => {
+        (categories[k] || []).forEach(c => {
+          let name = typeof c === 'object' ? c.name : c;
+          if (name && !catTracker.has(name)) {
+            catTracker.add(name);
+            orderedCats.push(name);
+          }
+        });
+      });
+      allCategoryList = orderedCats;
+      
+      selectedDashProjects = [...allProjectList];
+      selectedTxProjects = [...allProjectList];
+      selectedDashCategories = [...allCategoryList];
+      selectedTxCategories = [...allCategoryList];
+
+      selectedDashTypes = [...ALL_TYPES_LIST];
+      selectedTxTypes = [...ALL_TYPES_LIST];
+
+      renderMultiSelectOptions('dash', 'project');
+      renderMultiSelectOptions('dash', 'type');
+      renderMultiSelectOptions('dash', 'category');
+
+      renderMultiSelectOptions('tx', 'project');
+      renderMultiSelectOptions('tx', 'type');
+      renderMultiSelectOptions('tx', 'category');
+      
+      updateDashDynamicDropdowns();
+      updateTxDynamicDropdowns();
+    }
+
+    function getCategoriesForProjects(selectedProjects, fullList) {
+      if (!selectedProjects || selectedProjects.length === 0 || selectedProjects.length === allProjectList.length) {
+        return fullList;
+      }
+      const matchedCats = new Set();
+      for (let i = 0; i < allData.length; i++) {
+        const d = allData[i];
+        if (selectedProjects.includes(d.project)) {
+          if (d.incCat) matchedCats.add(d.incCat);
+          if (d.expCat) matchedCats.add(d.expCat);
+          if (d.invType) matchedCats.add(d.invType);
+        }
+      }
+      return fullList.filter(c => matchedCats.has(c));
+    }
+
+    function formatPrettyDate(rawDateStr) {
+      if (!rawDateStr || !rawDateStr.includes('-')) return rawDateStr;
+      const parts = rawDateStr.split('-');
+      if (parts.length === 3) {
+        const day = parseInt(parts[2], 10);
+        const monthIndex = parseInt(parts[1], 10) - 1;
+        const year = parts[0];
+        return `${day} ${FULL_MONTH_NAMES[monthIndex] || parts[1]} ${year}`;
+      }
+      return rawDateStr;
+    }
+
+    function updateDashDynamicDropdowns() {
+      const elYear = document.getElementById('dash-year-select');
+      const elFromM = document.getElementById('dash-from-month');
+      const elToM = document.getElementById('dash-to-month');
+      const durationTextEl = document.getElementById('dash-duration-text');
+
+      const prevYear = elYear.value;
+      const prevFromM = elFromM.value;
+      const prevToM = elToM.value;
+
+      const uniqueYears = new Set();
+      const uniqueMonths = new Set();
+
+      let minDate = "";
+      let maxDate = "";
+
+      const isAllProjects = (selectedDashProjects.length === 0 || selectedDashProjects.length === allProjectList.length);
+
+      for (let i = 0; i < allData.length; i++) {
+        const d = allData[i];
+        if (isAllProjects || selectedDashProjects.includes(d.project)) {
+          if (d.date && d.date.includes('/')) {
+            const parts = d.date.split('/');
+            if (parts[1]) uniqueMonths.add(parts[1]);
+            if (parts[2]) uniqueYears.add(parts[2]);
+          }
+          if (d.rawDate && d.rawDate.includes('-')) {
+            if (!minDate || d.rawDate < minDate) minDate = d.rawDate;
+            if (!maxDate || d.rawDate > maxDate) maxDate = d.rawDate;
+          }
+        }
+      }
+
+      if (minDate && maxDate) {
+        durationTextEl.innerText = `Running: ${formatPrettyDate(minDate)} to ${formatPrettyDate(maxDate)}`;
+      } else {
+        durationTextEl.innerText = "Running: All Time Records";
+      }
+
+      let yearOpts = '<option value="">All Years</option>';
+      const sortedYears = Array.from(uniqueYears).sort((a, b) => b - a);
+      sortedYears.forEach(y => {
+        yearOpts += `<option value="${y}">${y}</option>`;
+      });
+      elYear.innerHTML = yearOpts;
+      elYear.value = uniqueYears.has(prevYear) ? prevYear : "";
+
+      let fromMOpts = '<option value="">From</option>';
+      let toMOpts = '<option value="">To</option>';
+      const sortedMonths = Array.from(uniqueMonths).sort((a, b) => Number(a) - Number(b));
+
+      sortedMonths.forEach(m => {
+        const mName = MONTH_NAMES[parseInt(m, 10) - 1] || m;
+        fromMOpts += `<option value="${m}">${mName}</option>`;
+        toMOpts += `<option value="${m}">${mName}</option>`;
+      });
+      elFromM.innerHTML = fromMOpts;
+      elToM.innerHTML = toMOpts;
+      elFromM.value = uniqueMonths.has(prevFromM) ? prevFromM : "";
+      elToM.value = uniqueMonths.has(prevToM) ? prevToM : "";
+
+      const dynamicCats = getCategoriesForProjects(selectedDashProjects, allCategoryList);
+      selectedDashCategories = selectedDashCategories.filter(c => dynamicCats.includes(c));
+      if (selectedDashCategories.length === 0) {
+        selectedDashCategories = [...dynamicCats];
+        const selectAllCatChk = document.getElementById('dash-select-all-cat');
+        if (selectAllCatChk) selectAllCatChk.checked = true;
+      }
+      
+      renderMultiSelectOptionsForList('dash', 'category', dynamicCats, selectedDashCategories);
+    }
+
+    function updateTxDynamicDropdowns() {
+      const elYear = document.getElementById('tx-filter-year');
+      const elFromM = document.getElementById('tx-from-month');
+      const elToM = document.getElementById('tx-to-month');
+
+      const prevYear = elYear.value;
+      const prevFromM = elFromM.value;
+      const prevToM = elToM.value;
+
+      const uniqueYears = new Set();
+      const uniqueMonths = new Set();
+
+      const isAllProjects = (selectedTxProjects.length === 0 || selectedTxProjects.length === allProjectList.length);
+
+      for (let i = 0; i < allData.length; i++) {
+        const d = allData[i];
+        if (isAllProjects || selectedTxProjects.includes(d.project)) {
+          if (d.date && d.date.includes('/')) {
+            const parts = d.date.split('/');
+            if (parts[1]) uniqueMonths.add(parts[1]);
+            if (parts[2]) uniqueYears.add(parts[2]);
+          }
+        }
+      }
+
+      let yearOpts = '<option value="">All Years</option>';
+      const sortedYears = Array.from(uniqueYears).sort((a, b) => b - a);
+      sortedYears.forEach(y => {
+        yearOpts += `<option value="${y}">${y}</option>`;
+      });
+      elYear.innerHTML = yearOpts;
+      elYear.value = uniqueYears.has(prevYear) ? prevYear : "";
+
+      let fromMOpts = '<option value="">From</option>';
+      let toMOpts = '<option value="">To</option>';
+      const sortedMonths = Array.from(uniqueMonths).sort((a, b) => Number(a) - Number(b));
+
+      sortedMonths.forEach(m => {
+        const mName = MONTH_NAMES[parseInt(m, 10) - 1] || m;
+        fromMOpts += `<option value="${m}">${mName}</option>`;
+        toMOpts += `<option value="${m}">${mName}</option>`;
+      });
+      elFromM.innerHTML = fromMOpts;
+      elToM.innerHTML = toMOpts;
+      elFromM.value = uniqueMonths.has(prevFromM) ? prevFromM : "";
+      elToM.value = uniqueMonths.has(prevToM) ? prevToM : "";
+
+      const dynamicCats = getCategoriesForProjects(selectedTxProjects, allCategoryList);
+      selectedTxCategories = selectedTxCategories.filter(c => dynamicCats.includes(c));
+      if (selectedTxCategories.length === 0) {
+        selectedTxCategories = [...dynamicCats];
+        const selectAllCatChk = document.getElementById('tx-select-all-cat');
+        if (selectAllCatChk) selectAllCatChk.checked = true;
+      }
+
+      renderMultiSelectOptionsForList('tx', 'category', dynamicCats, selectedTxCategories);
+    }
+
+    function toggleMultiSelectDropdown(type, target) {
+      document.getElementById(`${type}-${target}-dropdown-panel`).classList.toggle('hidden');
+    }
+
+    function renderMultiSelectOptions(type, target) {
+      let listData = [];
+      let selectedList = [];
+
+      if (target === 'project') {
+        listData = allProjectList;
+        selectedList = (type === 'dash') ? selectedDashProjects : selectedTxProjects;
+      } else if (target === 'type') {
+        listData = ALL_TYPES_LIST;
+        selectedList = (type === 'dash') ? selectedDashTypes : selectedTxTypes;
+      } else {
+        listData = allCategoryList;
+        selectedList = (type === 'dash') ? selectedDashCategories : selectedTxCategories;
+      }
+
+      renderMultiSelectOptionsForList(type, target, listData, selectedList);
+    }
+
+    function renderMultiSelectOptionsForList(type, target, listData, selectedList) {
+      const container = document.getElementById(`${type}-${target}-checkbox-list`);
+      if (!container) return;
+      let html = '';
+      for (let i = 0; i < listData.length; i++) {
+        const item = listData[i];
+        const isChecked = selectedList.includes(item);
+        html += `
+          <label class="flex items-center gap-1.5 p-1 hover:bg-slate-100 rounded cursor-pointer text-slate-700">
+            <input type="checkbox" value="${item}" onchange="handleCheckboxChange('${type}', '${target}', this)" ${isChecked ? 'checked' : ''} class="rounded text-sky-600 focus:ring-0 ${type}-${target}-chk">
+            <span class="truncate">${item}</span>
+          </label>
+        `;
+      }
+      container.innerHTML = html;
+      updateMultiSelectLabelCustom(type, target, selectedList, listData);
+    }
+
+    function handleCheckboxChange(type, target, checkbox) {
+      let selectedList;
+      if (target === 'project') {
+        selectedList = (type === 'dash') ? selectedDashProjects : selectedTxProjects;
+      } else if (target === 'type') {
+        selectedList = (type === 'dash') ? selectedDashTypes : selectedTxTypes;
+      } else {
+        selectedList = (type === 'dash') ? selectedDashCategories : selectedTxCategories;
+      }
+
+      const val = checkbox.value;
+
+      if (checkbox.checked) {
+        if (!selectedList.includes(val)) selectedList.push(val);
+      } else {
+        selectedList = selectedList.filter(item => item !== val);
+      }
+
+      let currentListData = (target === 'project') 
+        ? allProjectList 
+        : (target === 'type') 
+          ? ALL_TYPES_LIST 
+          : getCategoriesForProjects(type === 'dash' ? selectedDashProjects : selectedTxProjects, allCategoryList);
+
+      if (target === 'project') {
+        if (type === 'dash') selectedDashProjects = selectedList;
+        else selectedTxProjects = selectedList;
+        updateMultiSelectLabelCustom(type, 'project', selectedList, allProjectList);
+      } else if (target === 'type') {
+        if (type === 'dash') selectedDashTypes = selectedList;
+        else selectedTxTypes = selectedList;
+        updateMultiSelectLabelCustom(type, 'type', selectedList, ALL_TYPES_LIST);
+      } else {
+        if (type === 'dash') selectedDashCategories = selectedList;
+        else selectedTxCategories = selectedList;
+        updateMultiSelectLabelCustom(type, 'category', selectedList, currentListData);
+      }
+
+      if (type === 'dash') {
+        if (target === 'project') updateDashDynamicDropdowns();
+        applyDashFilters();
+      } else {
+        if (target === 'project') updateTxDynamicDropdowns();
+        applyTxFilters();
+      }
+    }
+
+    function toggleSelectAll(type, target) {
+      const selectAllChk = document.getElementById(`${type}-select-all-${target === 'project' ? 'proj' : target === 'type' ? 'type' : 'cat'}`);
+      const checkboxes = document.querySelectorAll(`.${type}-${target}-chk`);
+      
+      let listData;
+      if (target === 'project') listData = allProjectList;
+      else if (target === 'type') listData = ALL_TYPES_LIST;
+      else listData = getCategoriesForProjects(type === 'dash' ? selectedDashProjects : selectedTxProjects, allCategoryList);
+
+      if (selectAllChk.checked) {
+        if (target === 'project') {
+          if (type === 'dash') selectedDashProjects = [...allProjectList];
+          else selectedTxProjects = [...allProjectList];
+        } else if (target === 'type') {
+          if (type === 'dash') selectedDashTypes = [...ALL_TYPES_LIST];
+          else selectedTxTypes = [...ALL_TYPES_LIST];
+        } else {
+          if (type === 'dash') selectedDashCategories = [...listData];
+          else selectedTxCategories = [...listData];
+        }
+        checkboxes.forEach(c => c.checked = true);
+      } else {
+        if (target === 'project') {
+          if (type === 'dash') selectedDashProjects = [];
+          else selectedTxProjects = [];
+        } else if (target === 'type') {
+          if (type === 'dash') selectedDashTypes = [];
+          else selectedTxTypes = [];
+        } else {
+          if (type === 'dash') selectedDashCategories = [];
+          else selectedTxCategories = [];
+        }
+        checkboxes.forEach(c => c.checked = false);
+      }
+
+      const selectedList = (target === 'project') 
+        ? (type === 'dash' ? selectedDashProjects : selectedTxProjects)
+        : (target === 'type')
+          ? (type === 'dash' ? selectedDashTypes : selectedTxTypes)
+          : (type === 'dash' ? selectedDashCategories : selectedTxCategories);
+
+      updateMultiSelectLabelCustom(type, target, selectedList, listData);
+
+      if (type === 'dash') {
+        if (target === 'project') updateDashDynamicDropdowns();
+        applyDashFilters();
+      } else {
+        if (target === 'project') updateTxDynamicDropdowns();
+        applyTxFilters();
+      }
+    }
+
+    function updateMultiSelectLabelCustom(type, target, selectedList, listData) {
+      const label = document.getElementById(`${type}-${target}-btn-label`);
+      const countEl = document.getElementById(`${type}-${target === 'project' ? 'proj' : target === 'type' ? 'type' : 'cat'}-selected-count`);
+
+      if (countEl) {
+        countEl.innerText = `${selectedList.length} of ${listData.length} selected`;
+      }
+
+      if (selectedList.length === 0) {
+        label.innerText = "None Selected";
+      } else if (selectedList.length === listData.length) {
+        label.innerText = (target === 'project') ? "All Projects" : (target === 'type') ? "All Types" : "All Categories";
+      } else if (selectedList.length === 1) {
+        label.innerText = selectedList[0];
+      } else {
+        label.innerText = `${selectedList.length} ${target === 'project' ? 'Projects' : target === 'type' ? 'Types' : 'Categories'}`;
+      }
+    }
+
+    function switchTab(tab) {
+      ['dashboard', 'transactions', 'categories', 'databank'].forEach(t => {
+        document.getElementById(`tab-${t}`).classList.add('hidden');
+        document.getElementById(`btn-${t}`).classList.remove('tab-active', 'text-white');
+        document.getElementById(`btn-${t}`).classList.add('text-slate-300');
+      });
+
+      document.getElementById(`tab-${tab}`).classList.remove('hidden');
+      document.getElementById(`btn-${tab}`).classList.add('tab-active', 'text-white');
+      
+      const titles = { 
+        dashboard: 'Executive Dashboard', 
+        transactions: 'All Transactions', 
+        categories: 'Category Management', 
+        databank: 'Data Bank' 
+      };
+      document.getElementById('page-title').innerText = titles[tab];
+
+      const sidebar = document.getElementById('main-sidebar');
+      if (!sidebar.classList.contains('-translate-x-full') && window.innerWidth < 768) {
+        toggleMobileSidebar();
+      }
+    }
+
+    function setDashPeriod(period) {
+      ['all', 'week', 'month', 'year'].forEach(p => {
+        document.getElementById(`btn-dash-${p}`).className = (p === period) 
+          ? "px-2 py-1 rounded text-[10px] font-semibold bg-slate-900 text-white transition"
+          : "px-2 py-1 rounded text-[10px] font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200 transition";
+      });
+
+      const today = new Date();
+      let fromDate = "";
+
+      if (period === 'week') {
+        const d = new Date();
+        d.setDate(d.getDate() - 7);
+        fromDate = d.toISOString().split('T')[0];
+      } else if (period === 'month') {
+        const d = new Date();
+        d.setDate(d.getDate() - 30);
+        fromDate = d.toISOString().split('T')[0];
+      } else if (period === 'year') {
+        const d = new Date();
+        d.setDate(d.getDate() - 365);
+        fromDate = d.toISOString().split('T')[0];
+      }
+
+      document.getElementById('dash-from-date').value = fromDate;
+      document.getElementById('dash-to-date').value = period === 'all' ? '' : today.toISOString().split('T')[0];
+      document.getElementById('dash-from-month').value = '';
+      document.getElementById('dash-to-month').value = '';
+      document.getElementById('dash-only-month').value = '';
+      document.getElementById('dash-year-select').value = '';
+
+      applyDashFilters();
+    }
+
+    function resetDashFilters() {
+      selectedDashProjects = [...allProjectList];
+      document.getElementById('dash-select-all-proj').checked = true;
+      document.querySelectorAll('.dash-project-chk').forEach(c => c.checked = true);
+      updateMultiSelectLabelCustom('dash', 'project', selectedDashProjects, allProjectList);
+
+      selectedDashTypes = [...ALL_TYPES_LIST];
+      document.getElementById('dash-select-all-type').checked = true;
+      document.querySelectorAll('.dash-type-chk').forEach(c => c.checked = true);
+      updateMultiSelectLabelCustom('dash', 'type', selectedDashTypes, ALL_TYPES_LIST);
+
+      selectedDashCategories = [...allCategoryList];
+      document.getElementById('dash-select-all-cat').checked = true;
+      document.querySelectorAll('.dash-category-chk').forEach(c => c.checked = true);
+      updateMultiSelectLabelCustom('dash', 'category', selectedDashCategories, allCategoryList);
+
+      document.getElementById('dash-only-month').value = '';
+      document.getElementById('dash-from-date').value = '';
+      document.getElementById('dash-to-date').value = '';
+      document.getElementById('dash-from-month').value = '';
+      document.getElementById('dash-to-month').value = '';
+      document.getElementById('dash-year-select').value = '';
+
+      ['all', 'week', 'month', 'year'].forEach(p => {
+        document.getElementById(`btn-dash-${p}`).className = (p === 'all') 
+          ? "px-2 py-1 rounded text-[10px] font-semibold bg-slate-900 text-white transition"
+          : "px-2 py-1 rounded text-[10px] font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200 transition";
+      });
+
+      updateDashDynamicDropdowns();
+      applyDashFilters();
+    }
+
+    function applyDashFilters() {
+      const yearSel = document.getElementById('dash-year-select').value;
+      const onlyMonth = document.getElementById('dash-only-month').value;
+      const fromMonth = document.getElementById('dash-from-month').value;
+      const toMonth = document.getElementById('dash-to-month').value;
+      const fromDate = document.getElementById('dash-from-date').value;
+      const toDate = document.getElementById('dash-to-date').value;
+
+      currentDashboardData = [];
+      for (let i = 0; i < allData.length; i++) {
+        const d = allData[i];
+        if (selectedDashProjects.length > 0 && !selectedDashProjects.includes(d.project)) continue;
+        if (selectedDashTypes.length > 0 && !selectedDashTypes.includes(d.type)) continue;
+        
+        const rowCat = d.incCat || d.expCat || d.invType || '';
+        if (selectedDashCategories.length > 0 && rowCat && !selectedDashCategories.includes(rowCat)) continue;
+        
+        if (d.date && d.date.includes('/')) {
+          const parts = d.date.split('/');
+          const mNum = parts[1];
+          const yNum = parts[2];
+          if (yearSel && yNum !== yearSel) continue;
+
+          if (onlyMonth && mNum !== onlyMonth) continue;
+
+          if (fromMonth && Number(mNum) < Number(fromMonth)) continue;
+          if (toMonth && Number(mNum) > Number(toMonth)) continue;
+        }
+
+        if (fromDate && d.rawDate < fromDate) continue;
+        if (toDate && d.rawDate > toDate) continue;
+
+        currentDashboardData.push(d);
+      }
+
+      renderDashboard(currentDashboardData);
+      renderSummaryByMonth(currentDashboardData);
+    }
+
+    function renderDashboard(data) {
+      let income = 0, expense = 0, investment = 0, withdrawal = 0;
+      let catMap = {};
+
+      for (let i = 0; i < data.length; i++) {
+        const item = data[i];
+        const type = (item.type || '').toLowerCase();
+        const incAmt = Number(item.incAmt) || 0;
+        const expAmt = Number(item.expAmt) || 0;
+        const invAmt = Number(item.invAmt) || 0;
+        const withAmt = Number(item.withAmt) || 0;
+
+        if (type.includes('inflow') || type.includes('income')) income += incAmt;
+        if (type.includes('outflow') || type.includes('expense')) {
+          expense += expAmt;
+          const c = item.expCat || 'General';
+          catMap[c] = (catMap[c] || 0) + expAmt;
+        } 
+        if (type.includes('investment')) investment += invAmt;
+        if (type.includes('withdrawal') || withAmt > 0) withdrawal += withAmt;
+      }
+
+      const netProfit = (income - expense) - withdrawal;
+
+      document.getElementById('kpi-investment').innerText = `£ ${fmt.format(investment)}`;
+      document.getElementById('kpi-income').innerText = `£ ${fmt.format(income)}`;
+      document.getElementById('kpi-expense').innerText = `£ ${fmt.format(expense)}`;
+      document.getElementById('kpi-net').innerText = `£ ${fmt.format(netProfit)}`;
+
+      currentExpenseCats = Object.entries(catMap).sort((a, b) => b[1] - a[1]);
+      currentTotalExpense = expense;
+      renderExpenseBars();
+
+      renderChart(data);
+    }
+
+    function renderSummaryByMonth(data) {
+      const tbody = document.getElementById('summary-month-tbody');
+      const monthlyMap = {};
+
+      for (let i = 0; i < data.length; i++) {
+        const d = data[i];
+        let mKey = "Other";
+        let sortKey = 0;
+        if (d.date && d.date.includes('/')) {
+          const parts = d.date.split('/');
+          const monthIndex = parseInt(parts[1], 10) - 1;
+          const year = parts[2];
+          mKey = `${MONTH_NAMES[monthIndex] || parts[1]} ${year}`;
+          sortKey = parseInt(year + parts[1], 10);
+        }
+
+        if (!monthlyMap[mKey]) {
+          monthlyMap[mKey] = { mKey: mKey, sortKey: sortKey, inv: 0, inc: 0, exp: 0, withAmt: 0 };
+        }
+
+        monthlyMap[mKey].inv += Number(d.invAmt) || 0;
+        monthlyMap[mKey].inc += Number(d.incAmt) || 0;
+        monthlyMap[mKey].exp += Number(d.expAmt) || 0;
+        monthlyMap[mKey].withAmt += Number(d.withAmt) || 0;
+      }
+
+      const sortedMonths = Object.values(monthlyMap).sort((a, b) => a.sortKey - b.sortKey);
+      document.getElementById('summary-month-count').innerText = `${sortedMonths.length} Months Calculated`;
+
+      let totInv = 0, totInc = 0, totExp = 0, totWith = 0;
+      sortedMonths.forEach(m => {
+        totInv += m.inv;
+        totInc += m.inc;
+        totExp += m.exp;
+        totWith += m.withAmt;
+      });
+
+      const totProfitLoss = (totInc - totExp) - totWith;
+      let currentRunningBal = totInv;
+
+      let rowsHtml = '';
+      sortedMonths.forEach(m => {
+        const pL = (m.inc - m.exp) - m.withAmt;
+        currentRunningBal += pL;
+
+        rowsHtml += `
+          <tr>
+            <td class="font-bold text-center bg-slate-50">${m.mKey}</td>
+            <td>${m.inv !== 0 ? fmt.format(m.inv) : '0'}</td>
+            <td class="text-emerald-700 font-semibold">${m.inc !== 0 ? fmt.format(m.inc) : '0'}</td>
+            <td class="text-rose-700 font-semibold">${m.exp !== 0 ? fmt.format(m.exp) : '0'}</td>
+            <td class="text-indigo-700 font-semibold">${m.withAmt !== 0 ? fmt.format(m.withAmt) : '0'}</td>
+            <td class="font-bold ${pL >= 0 ? 'text-emerald-600' : 'text-rose-600'}">${fmt.format(pL)}</td>
+            <td class="font-bold text-slate-800">${fmt.format(currentRunningBal)}</td>
+          </tr>
+        `;
+      });
+
+      const totalBlockHtml = `
+        <tr class="total-row">
+          <td class="text-center font-bold bg-slate-100">Total</td>
+          <td class="font-bold">${fmt.format(totInv)}</td>
+          <td class="font-bold text-emerald-700">${fmt.format(totInc)}</td>
+          <td class="font-bold text-rose-700">${fmt.format(totExp)}</td>
+          <td class="font-bold text-indigo-700">${fmt.format(totWith)}</td>
+          <td class="font-bold ${totProfitLoss >= 0 ? 'text-emerald-700' : 'text-rose-700'}">${fmt.format(totProfitLoss)}</td>
+          <td class="font-bold text-slate-900">${fmt.format(currentRunningBal)}</td>
+        </tr>
+        <tr class="bg-amber-50/60 font-bold border-b-2 border-slate-400">
+          <td colspan="6" class="text-right pr-4 text-amber-900">Total Investment Initial Base:</td>
+          <td class="text-amber-900 font-bold text-right">${fmt.format(totInv)}</td>
+        </tr>
+      `;
+
+      tbody.innerHTML = totalBlockHtml + rowsHtml;
+    }
+
+    function renderExpenseBars() {
+      const container = document.getElementById('category-progress-list');
+      const countInfo = document.getElementById('cat-count-info');
+      const toggleBtnContainer = document.getElementById('see-more-container');
+      const toggleBtn = document.getElementById('btn-toggle-cats');
+
+      countInfo.innerText = `${currentExpenseCats.length} Categories`;
+
+      if (currentTotalExpense === 0 || currentExpenseCats.length === 0) {
+        container.innerHTML = '<p class="text-slate-400 text-[10px] py-3 text-center">No expense records found.</p>';
+        toggleBtnContainer.classList.add('hidden');
+        return;
+      }
+
+      const itemsToShow = isShowingAllCats ? currentExpenseCats : currentExpenseCats.slice(0, 4);
+
+      let html = '';
+      for (let i = 0; i < itemsToShow.length; i++) {
+        const [cat, val] = itemsToShow[i];
+        let pct = Math.round((val / currentTotalExpense) * 100);
+        html += `
+          <div>
+            <div class="flex justify-between mb-0.5 text-[10px]">
+              <span class="font-medium text-slate-700 truncate pr-2">${cat}</span>
+              <span class="font-bold text-slate-800 shrink-0">${pct}% (£ ${fmt.format(val)})</span>
+            </div>
+            <div class="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+              <div class="bg-blue-600 h-1.5 rounded-full" style="width: ${pct}%"></div>
+            </div>
+          </div>
+        `;
+      }
+      container.innerHTML = html;
+
+      if (currentExpenseCats.length > 4) {
+        toggleBtnContainer.classList.remove('hidden');
+        toggleBtn.innerHTML = isShowingAllCats ? `<span>See less</span> <i class="fa-solid fa-chevron-up text-[9px]"></i>` : `<span>See more (${currentExpenseCats.length - 4} more)</span> <i class="fa-solid fa-chevron-down text-[9px]"></i>`;
+      } else {
+        toggleBtnContainer.classList.add('hidden');
+      }
+    }
+
+    function toggleExpenseCategories() {
+      isShowingAllCats = !isShowingAllCats;
+      renderExpenseBars();
+    }
+
+    function renderChart(data) {
+      const ctx = document.getElementById('trendChart').getContext('2d');
+      if (trendChart) trendChart.destroy();
+
+      const monthly = {};
+      for (let i = 0; i < data.length; i++) {
+        const d = data[i];
+        let m = d.date && d.date.includes('/') ? d.date.substring(3) : 'Other';
+        if (!monthly[m]) monthly[m] = { income: 0, expense: 0 };
+        monthly[m].income += Number(d.incAmt) || 0;
+        monthly[m].expense += Number(d.expAmt) || 0;
+      }
+
+      const labels = Object.keys(monthly).slice(-6);
+      const incomeData = labels.map(l => monthly[l] ? monthly[l].income : 0);
+      const expenseData = labels.map(l => monthly[l] ? monthly[l].expense : 0);
+
+      trendChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [
+            { label: 'Income', data: incomeData, backgroundColor: '#10b981', borderRadius: 3, barPercentage: 0.7, categoryPercentage: 0.8 },
+            { label: 'Expense', data: expenseData, backgroundColor: '#ef4444', borderRadius: 3, barPercentage: 0.7, categoryPercentage: 0.8 }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: false,
+          layout: { padding: { top: 20 } },
+          plugins: {
+            legend: { display: false },
+            datalabels: {
+              anchor: 'end',
+              align: 'top',
+              offset: 2,
+              font: { size: 8.5, weight: 'bold' },
+              color: ctx => ctx.datasetIndex === 0 ? '#059669' : '#dc2626',
+              formatter: val => val === 0 ? '' : (val >= 1000 ? '£' + (val / 1000).toFixed(1) + 'k' : '£' + Math.round(val))
+            }
+          },
+          scales: {
+            y: { grid: { color: '#f1f5f9' }, ticks: { font: { size: 8.5 }, callback: v => '£' + fmtShort.format(v) } },
+            x: { grid: { display: false }, ticks: { font: { size: 8.5, weight: 'bold' }, color: '#475569' } }
+          }
+        }
+      });
+    }
+
+    function applyTxFilters() {
+      const search = (document.getElementById('tx-search').value || '').toLowerCase().trim();
+      const onlyMonth = document.getElementById('tx-only-month').value;
+      const selYear = document.getElementById('tx-filter-year').value;
+      const fromM = document.getElementById('tx-from-month').value;
+      const toM = document.getElementById('tx-to-month').value;
+
+      let filteredInv = 0, filteredInc = 0, filteredExp = 0, filteredWith = 0;
+      const filtered = [];
+
+      for (let i = 0; i < allData.length; i++) {
+        const d = allData[i];
+        if (selectedTxProjects.length > 0 && !selectedTxProjects.includes(d.project)) continue;
+        if (selectedTxTypes.length > 0 && !selectedTxTypes.includes(d.type)) continue;
+        
+        const rowCat = d.incCat || d.expCat || d.invType || '';
+        const dynamicCats = getCategoriesForProjects(selectedTxProjects, allCategoryList);
+        
+        if (selectedTxCategories.length < dynamicCats.length) {
+          if (!rowCat || !selectedTxCategories.includes(rowCat)) continue;
+        } else {
+          if (rowCat && selectedTxCategories.length > 0 && !selectedTxCategories.includes(rowCat)) continue;
+        }
+
+        if (d.date && d.date.includes('/')) {
+          const parts = d.date.split('/');
+          const mNum = parts[1];
+          const yNum = parts[2];
+          if (selYear && yNum !== selYear) continue;
+          
+          if (onlyMonth && mNum !== onlyMonth) continue;
+
+          if (fromM && Number(mNum) < Number(fromM)) continue;
+          if (toM && Number(mNum) > Number(toM)) continue;
+        }
+
+        if (search) {
+          const rowStr = `${d.txnId} ${d.project} ${d.type} ${d.invType} ${d.incCat} ${d.expCat} ${d.remarks}`.toLowerCase();
+          if (!rowStr.includes(search)) continue;
+        }
+
+        filteredInv += Number(d.invAmt) || 0;
+        filteredInc += Number(d.incAmt) || 0;
+        filteredExp += Number(d.expAmt) || 0;
+        filteredWith += Number(d.withAmt) || 0;
+
+        filtered.push(d);
+      }
+
+      currentFilteredData = filtered;
+      const netProfitLoss = (filteredInc - filteredExp) - filteredWith;
+
+      document.getElementById('tx-count-badge').innerText = `${currentFilteredData.length} Rows`;
+      document.getElementById('sum-filtered-inv').innerText = `£ ${fmt.format(filteredInv)}`;
+      document.getElementById('sum-filtered-inc').innerText = `£ ${fmt.format(filteredInc)}`;
+      document.getElementById('sum-filtered-exp').innerText = `£ ${fmt.format(filteredExp)}`;
+      document.getElementById('sum-filtered-net').innerText = `£ ${fmt.format(netProfitLoss)}`;
+
+      const card = document.getElementById('sum-profit-loss-card');
+      const label = document.getElementById('sum-profit-loss-label');
+      const badge = document.getElementById('sum-profit-loss-badge');
+
+      if (netProfitLoss > 0) {
+        card.className = "bg-emerald-50 border border-emerald-300 px-2.5 py-1.5 rounded-lg flex items-center justify-between";
+        label.innerText = "NET PROFIT (লাভ)";
+        label.className = "text-[8.5px] font-bold uppercase text-emerald-700";
+        badge.className = "px-1.5 py-0.5 rounded text-[8.5px] font-bold bg-emerald-600 text-white";
+        badge.innerText = "PROFIT";
+      } else if (netProfitLoss < 0) {
+        card.className = "bg-rose-50 border border-rose-300 px-2.5 py-1.5 rounded-lg flex items-center justify-between";
+        label.innerText = "NET LOSS (ক্ষতি)";
+        label.className = "text-[8.5px] font-bold uppercase text-rose-700";
+        badge.className = "px-1.5 py-0.5 rounded text-[8.5px] font-bold bg-rose-600 text-white";
+        badge.innerText = "LOSS";
+      } else {
+        card.className = "bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-lg flex items-center justify-between";
+        label.innerText = "NET BALANCE";
+        label.className = "text-[8.5px] font-bold uppercase text-slate-500";
+        badge.className = "px-1.5 py-0.5 rounded text-[8.5px] font-bold bg-slate-200 text-slate-700";
+        badge.innerText = "BALANCED";
+      }
+
+      renderedTxCount = 0;
+      document.getElementById('all-transactions-tbody').innerHTML = '';
+      appendMoreTableRows();
+    }
+
+    function appendMoreTableRows() {
+      const tbody = document.getElementById('all-transactions-tbody');
+      if (currentFilteredData.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="22" class="text-center py-6 text-slate-400">No transaction records found matching filters.</td></tr>`;
+        return;
+      }
+
+      const nextBatch = currentFilteredData.slice(renderedTxCount, renderedTxCount + TX_PAGE_SIZE);
+      if (nextBatch.length === 0) return;
+
+      let rowsHtml = '';
+      for (let i = 0; i < nextBatch.length; i++) {
+        const row = nextBatch[i];
+        const idx = renderedTxCount + i + 1;
+        
+        const cleanImportantLink = sanitizeUrl(row.importantLink);
+        const cleanReceiptUrl = sanitizeUrl(row.receiptUrl);
+
+        const linkHtml = cleanImportantLink 
+          ? `<a href="${cleanImportantLink}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 transition inline-block px-1 py-0.5" title="Open Link"><i class="fa-solid fa-arrow-up-right-from-square text-[9.5px]"></i></a>` 
+          : '';
+          
+        const receiptHtml = cleanReceiptUrl 
+          ? `<a href="${cleanReceiptUrl}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 transition inline-block px-1 py-0.5" title="Open Receipt"><i class="fa-solid fa-arrow-up-right-from-square text-[9.5px]"></i></a>` 
+          : '';
+
+        rowsHtml += `
+          <tr>
+            <td class="text-center text-slate-400 bg-slate-50">${idx}</td>
+            <td class="text-center font-bold text-sky-700 bg-sky-50/50">${row.txnId}</td>
+            <td class="text-center text-slate-500 text-[9px]">${row.timestamp}</td>
+            <td class="text-center font-medium">${row.date}</td>
+            <td class="text-center font-bold">${row.project}</td>
+            <td class="text-center font-semibold">${row.type}</td>
+            <td class="col-inv">${row.invType}</td>
+            <td class="col-inv">${row.invThrough}</td>
+            <td class="col-inv">${row.invNote}</td>
+            <td class="col-inv text-right font-bold">${row.invAmt !== "" ? '£ ' + fmt.format(row.invAmt) : ""}</td>
+            <td class="col-income font-medium">${row.incCat}</td>
+            <td class="col-income text-center">${row.incVia}</td>
+            <td class="col-income">${row.incNote}</td>
+            <td class="col-income text-right font-bold">${row.incAmt !== "" ? '£ ' + fmt.format(row.incAmt) : ""}</td>
+            <td class="col-expense font-medium">${row.expCat}</td>
+            <td class="col-expense text-center">${row.expVia}</td>
+            <td class="col-expense">${row.expNote}</td>
+            <td class="col-expense text-right font-bold">${row.expAmt !== "" ? '£ ' + fmt.format(row.expAmt) : ""}</td>
+            <td>${row.remarks}</td>
+            <td class="text-center">${linkHtml}</td>
+            <td class="text-center">${receiptHtml}</td>
+            <td class="col-with text-right font-bold text-indigo-700">${row.withAmt !== "" ? '£ ' + fmt.format(row.withAmt) : ""}</td>
+          </tr>
+        `;
+      }
+
+      tbody.insertAdjacentHTML('beforeend', rowsHtml);
+      renderedTxCount += nextBatch.length;
+    }
+
+    function handleTableScroll(container) {
+      if (container.scrollTop + container.clientHeight >= container.scrollHeight - 60) {
+        if (renderedTxCount < currentFilteredData.length) {
+          appendMoreTableRows();
+        }
+      }
+    }
+
+    function resetTxFilters() {
+      document.getElementById('tx-search').value = '';
+      document.getElementById('tx-only-month').value = '';
+      document.getElementById('tx-from-month').value = '';
+      document.getElementById('tx-to-month').value = '';
+      
+      selectedTxProjects = [...allProjectList];
+      document.getElementById('tx-select-all-proj').checked = true;
+      document.querySelectorAll('.tx-project-chk').forEach(c => c.checked = true);
+      updateMultiSelectLabelCustom('tx', 'project', selectedTxProjects, allProjectList);
+
+      selectedTxTypes = [...ALL_TYPES_LIST];
+      document.getElementById('tx-select-all-type').checked = true;
+      document.querySelectorAll('.tx-type-chk').forEach(c => c.checked = true);
+      updateMultiSelectLabelCustom('tx', 'type', selectedTxTypes, ALL_TYPES_LIST);
+
+      selectedTxCategories = [...allCategoryList];
+      document.getElementById('tx-select-all-cat').checked = true;
+      document.querySelectorAll('.tx-category-chk').forEach(c => c.checked = true);
+      updateMultiSelectLabelCustom('tx', 'category', selectedTxCategories, allCategoryList);
+
+      updateTxDynamicDropdowns();
+      document.getElementById('tx-filter-year').value = '';
+      applyTxFilters();
+    }
+
+    function exportTransactionsExcel() {
+      if (!currentFilteredData || currentFilteredData.length === 0) {
+        alert("No transaction records to export.");
+        return;
+      }
+
+      const headers = [
+        "TXN ID", "Timestamp", "Date", "Project", "Transaction Type",
+        "Investment Type", "Investment Through", "Investment Note", "Investment Amount (£)",
+        "Income Category", "Income Received Via", "Income Note", "Income Amount (£)",
+        "Expense Category", "Expense Paid Via", "Expense Note", "Expense Amount (£)",
+        "Withdrawal Amount (£)", "Description/Remarks", "Important Link", "Receipt Link"
+      ];
+
+      function cleanCell(val) {
+        if (val === null || val === undefined) return '""';
+        let str = String(val).replace(/"/g, '""');
+        return `"${str}"`;
+      }
+
+      const csvRows = [];
+      csvRows.push(headers.map(cleanCell).join(","));
+
+      for (let i = 0; i < currentFilteredData.length; i++) {
+        const d = currentFilteredData[i];
+        const row = [
+          d.txnId,
+          d.timestamp,
+          d.date,
+          d.project,
+          d.type,
+          d.invType,
+          d.invThrough,
+          d.invNote,
+          d.invAmt !== "" ? d.invAmt : 0,
+          d.incCat,
+          d.incVia,
+          d.incNote,
+          d.incAmt !== "" ? d.incAmt : 0,
+          d.expCat,
+          d.expVia,
+          d.expNote,
+          d.expAmt !== "" ? d.expAmt : 0,
+          d.withAmt !== "" ? d.withAmt : 0,
+          d.remarks,
+          d.importantLink,
+          d.receiptUrl
+        ];
+        csvRows.push(row.map(cleanCell).join(","));
+      }
+
+      const csvString = "\uFEFF" + csvRows.join("\r\n");
+      const blob = new Blob([csvString], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", `Transactions_${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      setTimeout(() => {
+        switchTab('dashboard');
+      }, 300);
+    }
+
+    function openDashboardPdfModal() {
+      const year = document.getElementById('dash-year-select').value || 'All Years';
+      const fromM = document.getElementById('dash-from-month').value;
+      const toM = document.getElementById('dash-to-month').value;
+      const onlyMonth = document.getElementById('dash-only-month').value;
+      const projLabel = document.getElementById('dash-project-btn-label').innerText;
+
+      let monthRangeStr = "All Months";
+      if (onlyMonth) {
+        monthRangeStr = FULL_MONTH_NAMES[Number(onlyMonth)-1];
+      } else if (fromM && toM) {
+        monthRangeStr = `${MONTH_NAMES[Number(fromM)-1]} - ${MONTH_NAMES[Number(toM)-1]}`;
+      } else if (fromM) {
+        monthRangeStr = `From ${MONTH_NAMES[Number(fromM)-1]}`;
+      } else if (toM) {
+        monthRangeStr = `Up to ${MONTH_NAMES[Number(toM)-1]}`;
+      }
+
+      document.getElementById('dash-pdf-subtitle').innerText = `${projLabel} | ${monthRangeStr} (${year})`;
+      document.getElementById('dash-report-scope').innerText = `Executive Scope: Project(s): [${projLabel}] (${monthRangeStr} ${year}) - Total Active Records: ${currentDashboardData.length}`;
+      document.getElementById('dash-report-gen-date').innerText = new Date().toLocaleString();
+
+      document.getElementById('pdf-dash-inv').innerText = document.getElementById('kpi-investment').innerText;
+      document.getElementById('pdf-dash-inc').innerText = document.getElementById('kpi-income').innerText;
+      document.getElementById('pdf-dash-exp').innerText = document.getElementById('kpi-expense').innerText;
+      document.getElementById('pdf-dash-net').innerText = document.getElementById('kpi-net').innerText;
+
+      document.getElementById('pdf-summary-month-container').innerHTML = document.querySelector('.summary-month-table').outerHTML;
+      document.getElementById('dash-pdf-modal').classList.remove('hidden');
+    }
+
+    function closeDashboardPdfModal() {
+      document.getElementById('dash-pdf-modal').classList.add('hidden');
+    }
+
+    function printDashPdfModal() {
+      const printArea = document.getElementById('dash-pdf-printable');
+      printArea.classList.add('print-active');
+      window.print();
+      printArea.classList.remove('print-active');
+      closeDashboardPdfModal();
+      switchTab('dashboard');
+    }
+
+    function openPdfReportModal() {
+      const year = document.getElementById('tx-filter-year').value || 'All Years';
+      const projLabel = document.getElementById('tx-project-btn-label').innerText;
+      const fromM = document.getElementById('tx-from-month').value;
+      const toM = document.getElementById('tx-to-month').value;
+      const onlyMonth = document.getElementById('tx-only-month').value;
+
+      let monthRangeStr = "All Months";
+      if (onlyMonth) {
+        monthRangeStr = FULL_MONTH_NAMES[Number(onlyMonth)-1];
+      } else if (fromM && toM) {
+        monthRangeStr = `${MONTH_NAMES[Number(fromM)-1]} - ${MONTH_NAMES[Number(toM)-1]}`;
+      } else if (fromM) {
+        monthRangeStr = `From ${MONTH_NAMES[Number(fromM)-1]}`;
+      } else if (toM) {
+        monthRangeStr = `Up to ${MONTH_NAMES[Number(toM)-1]}`;
+      }
+
+      document.getElementById('pdf-preview-subtitle').innerText = `${projLabel} | ${monthRangeStr} ${year}`;
+      document.getElementById('report-filter-tag').innerText = `Filtered Report: Project(s): [${projLabel}] (${monthRangeStr} ${year}) - Total: ${currentFilteredData.length} records`;
+      document.getElementById('report-gen-date').innerText = new Date().toLocaleString();
+
+      let inv = 0, inc = 0, exp = 0, withAmt = 0;
+      let rowsHtml = '';
+      for (let i = 0; i < currentFilteredData.length; i++) {
+        const row = currentFilteredData[i];
+        inv += Number(row.invAmt) || 0;
+        inc += Number(row.incAmt) || 0;
+        exp += Number(row.expAmt) || 0;
+        withAmt += Number(row.withAmt) || 0;
+
+        const cat = row.incCat || row.expCat || row.invType || '-';
+        const via = row.incVia || row.expVia || row.invThrough || '-';
+        const note = row.incNote || row.expNote || row.invNote || row.remarks || '-';
+
+        rowsHtml += `
+          <tr class="hover:bg-slate-50">
+            <td class="p-1 border-r border-slate-200 text-center font-medium">${row.date}</td>
+            <td class="p-1 border-r border-slate-200 font-bold">${row.project}</td>
+            <td class="p-1 border-r border-slate-200">${row.type}</td>
+            <td class="p-1 border-r border-slate-200">${cat}</td>
+            <td class="p-1 border-r border-slate-200 text-center">${via}</td>
+            <td class="p-1 border-r border-slate-200 text-right font-bold text-emerald-700">${row.incAmt !== "" ? '£ ' + fmt.format(row.incAmt) : '-'}</td>
+            <td class="p-1 border-r border-slate-200 text-right font-bold text-rose-700">${row.expAmt !== "" ? '£ ' + fmt.format(row.expAmt) : '-'}</td>
+            <td class="p-1 border-r border-slate-200 text-right font-bold text-indigo-700">${row.withAmt !== "" ? '£ ' + fmt.format(row.withAmt) : '-'}</td>
+            <td class="p-1 text-slate-600">${note}</td>
+          </tr>
+        `;
+      }
+      document.getElementById('pdf-table-tbody').innerHTML = rowsHtml;
+
+      const net = (inc - exp) - withAmt;
+      document.getElementById('pdf-sum-inv').innerText = `£ ${fmt.format(inv)}`;
+      document.getElementById('pdf-sum-inc').innerText = `£ ${fmt.format(inc)}`;
+      document.getElementById('pdf-sum-exp').innerText = `£ ${fmt.format(exp)}`;
+      document.getElementById('pdf-sum-net').innerText = `£ ${fmt.format(net)}`;
+      document.getElementById('pdf-sum-net').className = net >= 0 ? "text-[10.5px] font-bold text-emerald-700" : "text-[10.5px] font-bold text-rose-700";
+      document.getElementById('pdf-net-label').innerText = net >= 0 ? "Net Profit" : "Net Loss";
+
+      document.getElementById('pdf-modal').classList.remove('hidden');
+    }
+
+    function closePdfReportModal() {
+      document.getElementById('pdf-modal').classList.add('hidden');
+    }
+
+    function printPdfModal() {
+      const printArea = document.getElementById('pdf-printable-area');
+      printArea.classList.add('print-active');
+      window.print();
+      printArea.classList.remove('print-active');
+      closePdfReportModal();
+      switchTab('dashboard');
+    }
+
+    function handleDirectSheetAccess(e) {
+      e.preventDefault();
+      const pwd = document.getElementById('databank-pwd').value;
+      if (pwd === '123321') {
+        document.getElementById('pwd-error').classList.add('hidden');
+        if (spreadsheetUrl) {
+          window.open(spreadsheetUrl, '_blank');
+        } else {
+          alert('Google Sheet URL is loading...');
+        }
+      } else {
+        document.getElementById('pwd-error').classList.remove('hidden');
+      }
+    }
+
+    function togglePasswordVisibility() {
+      const pwdInput = document.getElementById('databank-pwd');
+      const eyeIcon = document.getElementById('pwd-eye-icon');
+      if (pwdInput.type === 'password') {
+        pwdInput.type = 'text';
+        eyeIcon.classList.replace('fa-eye', 'fa-eye-slash');
+      } else {
+        pwdInput.type = 'password';
+        eyeIcon.classList.replace('fa-eye-slash', 'fa-eye');
+      }
+    }
+
+    function toggleFormFields() {
+      const type = document.getElementById('m-type').value;
+      document.getElementById('section-investment').classList.add('hidden');
+      document.getElementById('section-income').classList.add('hidden');
+      document.getElementById('section-expense').classList.add('hidden');
+      document.getElementById('section-withdrawal').classList.add('hidden');
+
+      if (type === 'Investment') document.getElementById('section-investment').classList.remove('hidden');
+      if (type === 'Cash Inflow') document.getElementById('section-income').classList.remove('hidden');
+      if (type === 'Cash Outflow') document.getElementById('section-expense').classList.remove('hidden');
+      if (type === 'Withdrawal') document.getElementById('section-withdrawal').classList.remove('hidden');
+    }
+
+    function openModal() { 
+      document.getElementById('tx-modal').classList.remove('hidden'); 
+    }
+    function closeModal() { 
+      document.getElementById('tx-modal').classList.add('hidden'); 
+    }
+
+    function submitTransaction(e) {
+      e.preventDefault();
+      const saveBtn = document.getElementById('btn-save');
+      saveBtn.innerText = 'Saving...';
+      saveBtn.disabled = true;
+
+      const payload = {
+        date: document.getElementById('m-date').value,
+        project: document.getElementById('m-project').value,
+        type: document.getElementById('m-type').value,
+        amount: document.getElementById('m-amount').value,
+        invType: document.getElementById('m-invType').value.trim(),
+        invThrough: document.getElementById('m-invThrough').value.trim(),
+        invNote: document.getElementById('m-invNote').value.trim(),
+        incCat: document.getElementById('m-incCat').value.trim(),
+        incVia: document.getElementById('m-incVia').value.trim(),
+        incNote: document.getElementById('m-incNote').value.trim(),
+        expCat: document.getElementById('m-expCat').value.trim(),
+        expVia: document.getElementById('m-expVia').value.trim(),
+        expNote: document.getElementById('m-expNote').value.trim(),
+        importantLink: document.getElementById('m-link').value.trim(),
+        receiptUrl: document.getElementById('m-receipt').value.trim(),
+        remarks: document.getElementById('m-remarks').value.trim()
+      };
+
+      callAPI("addTransaction", { data: payload }).then(res => {
+        saveBtn.innerText = 'Save';
+        saveBtn.disabled = false;
+        closeModal();
+        document.getElementById('tx-form').reset();
+        document.getElementById('m-date').valueAsDate = new Date();
+        refreshAppData();
+      });
+    }
+
+    function submitCategory(e) {
+      e.preventDefault();
+      const btn = document.getElementById('btn-cat-save');
+      btn.innerText = 'Saving...';
+      btn.disabled = true;
+
+      const type = document.getElementById('new-cat-type').value;
+      const name = document.getElementById('new-cat-name').value.trim();
+
+      if (!name) return;
+
+      callAPI("saveCategory", { type: type, name: name }).then(res => {
+        btn.innerText = 'Save';
+        btn.disabled = false;
+        document.getElementById('new-cat-name').value = '';
+        refreshAppData();
+      });
+    }
+  </script>
+</body>
+</html>
